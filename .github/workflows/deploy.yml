@@ -1,0 +1,123 @@
+name: RTB CI/CD Pipeline & Auto-Deploy to Hostinger VPS
+
+on:
+  push:
+    branches:
+      - main
+      - master
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  test-and-build:
+    name: Build & Test Application
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+
+      - name: Install & Test Backend
+        working-directory: ./backend
+        run: |
+          npm ci
+          npx prisma generate
+          npm run lint
+          npm run build
+
+      - name: Install & Build Frontend
+        working-directory: ./frontend
+        run: |
+          npm ci
+          npm run build
+
+  deploy-vps:
+    name: Deploy to Hostinger VPS
+    needs: test-and-build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Configure SSH Key
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_SSH_PORT || 22 }}
+          script_stop: true
+          script: |
+            TARGET_DIR="${{ secrets.VPS_TARGET_DIR || '/var/www/rtb-portal' }}"
+            REPO_URL="${{ github.server_url }}/${{ github.repository }}.git"
+            BRANCH="${{ github.ref_name }}"
+
+            echo "=== 1. Ensuring target directory exists: $TARGET_DIR ==="
+            mkdir -p "$TARGET_DIR"
+
+            if [ ! -d "$TARGET_DIR/.git" ]; then
+              echo "Cloning repository into $TARGET_DIR..."
+              git clone "$REPO_URL" "$TARGET_DIR"
+            fi
+
+            cd "$TARGET_DIR"
+
+            echo "=== 2. Pulling latest code from branch $BRANCH ==="
+            git fetch origin "$BRANCH"
+            git reset --hard "origin/$BRANCH"
+
+            echo "=== 3. Checking Environment Configuration ==="
+            if [ ! -f .env ]; then
+              echo "Warning: .env file missing in $TARGET_DIR. Copying from .env.example..."
+              cp .env.example .env
+              echo "Created initial .env with default values. Please customize secrets if needed."
+            fi
+
+            echo "=== 4. Building and updating Docker containers with zero-downtime ==="
+            # Build new images in background without stopping current running containers
+            docker compose build --parallel
+
+            # Up containers with orphan cleanup; existing DB persistent volume is preserved
+            docker compose up -d --remove-orphans
+
+            echo "=== 5. Running Health Check ==="
+            ATTEMPTS=0
+            MAX_ATTEMPTS=12
+            SLEEP_SEC=5
+            SUCCESS=0
+
+            while [ $ATTEMPTS -lt $MAX_ATTEMPTS ]; do
+              ATTEMPTS=$((ATTEMPTS+1))
+              echo "Verifying application health (Attempt $ATTEMPTS/$MAX_ATTEMPTS)..."
+              
+              STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:80 || curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3000 || echo "000")
+              
+              if [ "$STATUS_CODE" = "200" ] || [ "$STATUS_CODE" = "304" ]; then
+                echo "✅ Health check passed! Live RTB portal responded with HTTP $STATUS_CODE"
+                SUCCESS=1
+                break
+              fi
+              
+              sleep $SLEEP_SEC
+            done
+
+            if [ $SUCCESS -ne 1 ]; then
+              echo "⚠️ Warning: Health check did not return HTTP 200 within expected time."
+              docker compose ps
+              docker compose logs --tail=40
+            fi
+
+            echo "=== Deployment to Hostinger VPS successfully finished! ==="

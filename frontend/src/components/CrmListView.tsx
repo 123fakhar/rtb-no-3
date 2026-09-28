@@ -1,0 +1,286 @@
+"use client";
+
+import React, { useEffect, useState } from "react";
+import { apiRequest } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
+import {
+  Search,
+  CheckCircle2,
+  XCircle,
+  Clock,
+  Loader2,
+  RefreshCw,
+  Plus,
+  Filter,
+} from "lucide-react";
+
+interface CrmListViewProps {
+  onNewSubmissionClick?: () => void;
+  title?: string;
+}
+
+export function CrmListView({
+  onNewSubmissionClick,
+  title = "CRM Submissions",
+}: CrmListViewProps) {
+  const { isAdmin } = useAuth();
+  const [entries, setEntries] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+
+  const loadEntries = async () => {
+    setLoading(true);
+    try {
+      const q = new URLSearchParams({
+        page: "1",
+        limit: "50",
+        ...(search ? { search } : {}),
+        ...(statusFilter ? { status: statusFilter } : {}),
+      });
+      const res = await apiRequest<{ entries: any[] }>(`/api/crm?${q.toString()}`);
+      setEntries(res.entries);
+    } catch (err) {
+      console.error("Failed to load CRM entries:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadEntries();
+  }, [search, statusFilter]);
+
+  const handleReview = async (id: string, status: "APPROVED" | "REJECTED") => {
+    setActionLoadingId(id);
+    try {
+      await apiRequest(`/api/crm/${id}/review`, {
+        method: "PATCH",
+        body: JSON.stringify({ status }),
+      });
+      await loadEntries();
+    } catch (err: any) {
+      alert(err.message || "Failed to update review status");
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  return (
+    <div className="p-8 max-w-7xl mx-auto animate-in fade-in duration-150">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+        <div>
+          <span className="text-[10px] font-bold tracking-widest text-slate-400 uppercase">
+            CRM MANAGEMENT
+          </span>
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900 font-serif">
+            {title}
+          </h1>
+          <p className="text-xs text-slate-500 mt-1">
+            {isAdmin
+              ? "All submissions with full phone numbers. Review, approve, or reject agent leads."
+              : "Your customer submissions. First 3 digits are masked for compliance."}
+          </p>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <div className="relative">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Search customer, fronter..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="bg-white border border-slate-200 text-xs rounded-xl pl-9 pr-3 py-2 w-52 focus:outline-none focus:ring-2 focus:ring-slate-900 shadow-subtle"
+            />
+          </div>
+
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="bg-white border border-slate-200 text-xs rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-slate-900 shadow-subtle text-slate-700"
+          >
+            <option value="">All Statuses</option>
+            <option value="PENDING">Pending (Yellow)</option>
+            <option value="APPROVED">Approved (Green)</option>
+            <option value="REJECTED">Rejected (Red)</option>
+          </select>
+
+          <button
+            onClick={loadEntries}
+            className="p-2 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-600 shadow-subtle transition-colors"
+            title="Refresh"
+          >
+            <RefreshCw className="w-4 h-4" />
+          </button>
+
+          {onNewSubmissionClick && (
+            <button
+              onClick={onNewSubmissionClick}
+              className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-medium text-xs rounded-xl transition-colors flex items-center gap-1.5 shadow-sm"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>New Entry</span>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* CRM Submissions Table */}
+      <div className="bg-white border border-slate-200 rounded-2xl shadow-subtle overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="border-b border-slate-100 text-[11px] font-semibold text-slate-500 whitespace-nowrap">
+                <th className="py-3.5 px-4">Fronter's Name</th>
+                <th className="py-3.5 px-4">Customer Name</th>
+                <th className="py-3.5 px-4">
+                  Customer Number
+                  {!isAdmin && <span className="ml-1 text-[10px] text-amber-600 font-normal">(1st 3 hidden)</span>}
+                </th>
+                <th className="py-3.5 px-3">ZIP</th>
+                <th className="py-3.5 px-4">DID</th>
+                <th className="py-3.5 px-4">Campaign & Vertical</th>
+                <th className="py-3.5 px-4">Agent (Submitted By)</th>
+                <th className="py-3.5 px-5">Status</th>
+                <th className="py-3.5 px-4">Comment</th>
+                <th className="py-3.5 px-4 text-right">{isAdmin ? "Review Action" : "Submitted"}</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 text-xs">
+              {loading ? (
+                <tr>
+                  <td colSpan={10} className="py-12 text-center text-slate-400">
+                    <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-slate-600" />
+                    Loading CRM leads...
+                  </td>
+                </tr>
+              ) : entries.length === 0 ? (
+                <tr>
+                  <td colSpan={10} className="py-12 text-center text-slate-400">
+                    No CRM records found.
+                  </td>
+                </tr>
+              ) : (
+                entries.map((entry) => {
+                  const isPending = entry.status === "PENDING";
+                  const isApproved = entry.status === "APPROVED";
+                  const isRejected = entry.status === "REJECTED";
+                  const isActionLoading = actionLoadingId === entry.id;
+
+                  return (
+                    <tr key={entry.id} className="hover:bg-slate-50/70 transition-colors">
+                      <td className="py-3 px-4 font-semibold text-slate-900 whitespace-nowrap">
+                        {entry.fronterName}
+                      </td>
+                      <td className="py-3 px-4 font-medium text-slate-800 whitespace-nowrap">
+                        {entry.customerName}
+                      </td>
+                      <td className="py-3 px-4 font-mono font-medium whitespace-nowrap">
+                        {/* On Agent portal, first 3 numbers hidden! On Admin, NOT hidden! */}
+                        <span
+                          className={
+                            isAdmin
+                              ? "text-slate-900 font-bold"
+                              : "text-slate-700 bg-slate-100 px-2 py-0.5 rounded"
+                          }
+                        >
+                          {entry.customerNumber}
+                        </span>
+                      </td>
+                      <td className="py-3 px-3 font-mono text-slate-600">{entry.customerZip}</td>
+                      <td className="py-3 px-4 font-mono text-slate-500 whitespace-nowrap">
+                        {entry.did || "—"}
+                      </td>
+                      <td className="py-3 px-4 whitespace-nowrap">
+                        <span className="font-medium text-slate-800 block">
+                          {entry.campaignName}
+                        </span>
+                        <span className="text-[10px] text-slate-400">{entry.vertical}</span>
+                      </td>
+                      <td className="py-3 px-4 whitespace-nowrap">
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-5 h-5 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-[10px]">
+                            {entry.agentName.slice(0, 1)}
+                          </div>
+                          <span className="font-semibold text-slate-800">{entry.agentName}</span>
+                        </div>
+                      </td>
+                      <td className="py-3 px-5 whitespace-nowrap">
+                        {/* Status Badges:
+                            Pending (yellow), Approved (green), Rejected (red) */}
+                        {isPending && (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                            <Clock className="w-3 h-3" />
+                            <span>Pending</span>
+                          </span>
+                        )}
+                        {isApproved && (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                            <CheckCircle2 className="w-3 h-3" />
+                            <span>Approved</span>
+                          </span>
+                        )}
+                        {isRejected && (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-100 text-rose-800 border border-rose-300">
+                            <XCircle className="w-3 h-3" />
+                            <span>Rejected</span>
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-3 px-4 max-w-xs truncate text-slate-500 text-[11px]" title={entry.comment}>
+                        {entry.comment || "—"}
+                      </td>
+                      <td className="py-3 px-4 text-right whitespace-nowrap">
+                        {isAdmin ? (
+                          <div className="flex items-center justify-end gap-1.5">
+                            {isPending ? (
+                              <>
+                                <button
+                                  onClick={() => handleReview(entry.id, "APPROVED")}
+                                  disabled={isActionLoading}
+                                  className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-semibold transition-colors disabled:opacity-50"
+                                >
+                                  Approve
+                                </button>
+                                <button
+                                  onClick={() => handleReview(entry.id, "REJECTED")}
+                                  disabled={isActionLoading}
+                                  className="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[11px] font-semibold transition-colors disabled:opacity-50"
+                                >
+                                  Reject
+                                </button>
+                              </>
+                            ) : (
+                              <button
+                                onClick={() =>
+                                  handleReview(
+                                    entry.id,
+                                    isApproved ? "REJECTED" : "APPROVED"
+                                  )
+                                }
+                                disabled={isActionLoading}
+                                className="text-[11px] font-medium text-slate-500 hover:text-slate-800 underline"
+                              >
+                                Change to {isApproved ? "Rejected" : "Approved"}
+                              </button>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-[11px] text-slate-400">
+                            {new Date(entry.createdAt).toLocaleDateString()}
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
