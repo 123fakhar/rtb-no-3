@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { apiRequest } from "@/lib/api";
-import { Loader2, CheckCircle2 } from "lucide-react";
+import { Loader2, CheckCircle2, FileText, ArrowRight } from "lucide-react";
 
 interface CrmFormViewProps {
   onSuccess?: () => void;
@@ -84,38 +84,42 @@ export function CrmFormView({ onSuccess }: CrmFormViewProps) {
   if (submitted) {
     return (
       <div className="max-w-2xl mx-auto p-12 text-center animate-in fade-in duration-200">
-        <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto mb-4">
+        <div className="w-16 h-16 rounded-3xl bg-emerald-50 text-emerald-600 border border-emerald-200/60 flex items-center justify-center mx-auto mb-4 shadow-sm">
           <CheckCircle2 className="w-10 h-10" />
         </div>
-        <h2 className="text-2xl font-bold text-slate-900 font-serif">
+        <h2 className="text-2xl font-bold text-slate-900">
           Submission Received
         </h2>
         <p className="text-sm text-slate-500 mt-2">
           Your CRM entry has been submitted and is currently marked as{" "}
-          <span className="font-semibold text-amber-600">Pending</span> awaiting admin review.
+          <span className="font-bold text-amber-600">Pending</span> awaiting admin review.
         </p>
       </div>
     );
   }
 
   return (
-    <div className="max-w-4xl mx-auto p-8 animate-in fade-in duration-150">
-      <div className="mb-8">
-        <span className="text-[10px] font-bold tracking-widest text-slate-400 uppercase">
-          CUSTOMER RELATIONSHIP MANAGEMENT
-        </span>
-        <h1 className="text-3xl font-bold tracking-tight text-slate-900 font-serif">
-          CRM Submission
+    <div className="max-w-4xl mx-auto p-6 md:p-10 space-y-8 animate-in fade-in duration-200">
+      <div>
+        <div className="flex items-center gap-2 mb-2">
+          <div className="w-7 h-7 rounded-lg bg-blue-600 text-white flex items-center justify-center shadow-sm">
+            <FileText className="w-4 h-4" />
+          </div>
+          <span className="text-[11px] font-extrabold tracking-wider text-slate-500 uppercase">
+            LEAD VERIFICATION
+          </span>
+        </div>
+        <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-slate-900">
+          CRM Lead Submission
         </h1>
         <p className="text-xs text-slate-500 mt-1">
-          Submit customer details with fronter attribution, DID, and campaign vertical. Submissions
-          are reviewed and approved by administrators.
+          Submit customer details with fronter attribution, DID, and campaign vertical for admin QA.
         </p>
       </div>
 
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-subtle p-8 max-w-2xl">
+      <div className="kukie-card p-8 md:p-10 max-w-2xl border border-white/90">
         {error && (
-          <div className="mb-6 p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs">
+          <div className="mb-6 p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold">
             {error}
           </div>
         )}
@@ -123,8 +127,8 @@ export function CrmFormView({ onSuccess }: CrmFormViewProps) {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                Fronter's Name <span className="text-red-500">*</span>
+              <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">
+                Fronter&apos;s Name <span className="text-rose-500">*</span>
               </label>
               <input
                 type="text"
@@ -132,13 +136,13 @@ export function CrmFormView({ onSuccess }: CrmFormViewProps) {
                 value={fronterName}
                 onChange={(e) => setFronterName(e.target.value)}
                 required
-                className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-slate-900 transition-all placeholder:text-slate-400"
+                className="w-full px-4 py-2.5 bg-slate-50/60 border border-slate-200/90 rounded-2xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-600 focus:bg-white transition-all placeholder:text-slate-400"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                Customer Name <span className="text-red-500">*</span>
+              <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">
+                Customer Name <span className="text-rose-500">*</span>
               </label>
               <input
                 type="text"
@@ -146,15 +150,15 @@ export function CrmFormView({ onSuccess }: CrmFormViewProps) {
                 value={customerName}
                 onChange={(e) => setCustomerName(e.target.value)}
                 required
-                className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-slate-900 transition-all placeholder:text-slate-400"
+                className="w-full px-4 py-2.5 bg-slate-50/60 border border-slate-200/90 rounded-2xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-600 focus:bg-white transition-all placeholder:text-slate-400"
               />
             </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                Customer Number <span className="text-red-500">*</span>
+              <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">
+                Customer Number <span className="text-rose-500">*</span>
               </label>
               <input
                 type="tel"
@@ -162,16 +166,16 @@ export function CrmFormView({ onSuccess }: CrmFormViewProps) {
                 value={customerNumber}
                 onChange={(e) => setCustomerNumber(e.target.value)}
                 required
-                className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-mono focus:outline-none focus:ring-2 focus:ring-slate-900 transition-all placeholder:text-slate-400"
+                className="w-full px-4 py-2.5 bg-slate-50/60 border border-slate-200/90 rounded-2xl text-xs font-mono font-medium focus:outline-none focus:ring-2 focus:ring-blue-600 focus:bg-white transition-all placeholder:text-slate-400"
               />
-              <span className="text-[10px] text-slate-400 mt-1 block">
-                First 3 digits are automatically hidden for agent privacy.
+              <span className="text-[11px] text-slate-400 mt-1 block">
+                First 3 digits are automatically masked for agent accounts.
               </span>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                Customer ZIP Code <span className="text-red-500">*</span>
+              <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">
+                Customer ZIP Code <span className="text-rose-500">*</span>
               </label>
               <input
                 type="text"
@@ -179,14 +183,14 @@ export function CrmFormView({ onSuccess }: CrmFormViewProps) {
                 value={customerZip}
                 onChange={(e) => setCustomerZip(e.target.value)}
                 required
-                className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-mono focus:outline-none focus:ring-2 focus:ring-slate-900 transition-all placeholder:text-slate-400"
+                className="w-full px-4 py-2.5 bg-slate-50/60 border border-slate-200/90 rounded-2xl text-xs font-mono font-medium focus:outline-none focus:ring-2 focus:ring-blue-600 focus:bg-white transition-all placeholder:text-slate-400"
               />
             </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+              <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">
                 Customer Email
               </label>
               <input
@@ -194,33 +198,33 @@ export function CrmFormView({ onSuccess }: CrmFormViewProps) {
                 placeholder="customer@example.com"
                 value={customerEmail}
                 onChange={(e) => setCustomerEmail(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-slate-900 transition-all placeholder:text-slate-400"
+                className="w-full px-4 py-2.5 bg-slate-50/60 border border-slate-200/90 rounded-2xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-600 focus:bg-white transition-all placeholder:text-slate-400"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                DID (Inbound Direct Inward Dial)
+              <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">
+                DID (Direct Inward Dial)
               </label>
               <input
                 type="text"
-                placeholder="e.g. 844-901-2076"
+                placeholder="e.g. 800-555-0199"
                 value={did}
                 onChange={(e) => setDid(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-mono focus:outline-none focus:ring-2 focus:ring-slate-900 transition-all placeholder:text-slate-400"
+                className="w-full px-4 py-2.5 bg-slate-50/60 border border-slate-200/90 rounded-2xl text-xs font-mono font-medium focus:outline-none focus:ring-2 focus:ring-blue-600 focus:bg-white transition-all placeholder:text-slate-400"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-              Campaign Vertical <span className="text-red-500">*</span>
+            <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">
+              Campaign Vertical <span className="text-rose-500">*</span>
             </label>
             <select
               value={campaignId}
               onChange={(e) => setCampaignId(e.target.value)}
               required
-              className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-slate-900 transition-all text-slate-800"
+              className="w-full px-4 py-2.5 bg-slate-50/60 border border-slate-200/90 rounded-2xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-600 focus:bg-white transition-all text-slate-800"
             >
               {campaigns.map((c) => (
                 <option key={c.id} value={c.id}>
@@ -231,15 +235,15 @@ export function CrmFormView({ onSuccess }: CrmFormViewProps) {
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-              Comment / Notes
+            <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">
+              Comment / QA Notes
             </label>
             <textarea
               rows={3}
               placeholder="Customer requirements, quote details, policy notes..."
               value={comment}
               onChange={(e) => setComment(e.target.value)}
-              className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-slate-900 transition-all placeholder:text-slate-400 resize-none"
+              className="w-full px-4 py-2.5 bg-slate-50/60 border border-slate-200/90 rounded-2xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-600 focus:bg-white transition-all placeholder:text-slate-400"
             />
           </div>
 
@@ -247,10 +251,19 @@ export function CrmFormView({ onSuccess }: CrmFormViewProps) {
             <button
               type="submit"
               disabled={loading}
-              className="w-full sm:w-auto px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-medium text-xs rounded-xl transition-colors flex items-center justify-center gap-2 shadow-sm disabled:opacity-50"
+              className="btn-primary w-full sm:w-auto px-6 py-2.5 text-xs tracking-wider uppercase font-bold flex items-center justify-center gap-2 disabled:opacity-50"
             >
-              {loading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-              <span>Submit CRM Lead</span>
+              {loading ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>Submitting Entry...</span>
+                </>
+              ) : (
+                <>
+                  <span>Submit to CRM</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </>
+              )}
             </button>
           </div>
         </form>

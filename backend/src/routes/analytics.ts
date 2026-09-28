@@ -11,16 +11,31 @@ analyticsRouter.use(requireAuth);
  * GET /api/analytics/dashboard
  * RTB performance dashboard metrics (Revenue, Leads, Wins, Bid Requests, Buyer/Campaign breakdown).
  */
+function parseDate(value: unknown, fallback: Date): Date {
+  if (typeof value !== "string" || !value) return fallback;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? fallback : d;
+}
+
 analyticsRouter.get(
   "/dashboard",
   asyncHandler(async (req, res) => {
-    const range = typeof req.query.range === "string" ? req.query.range : "30d";
-    const days = range === "7d" ? 7 : range === "90d" ? 90 : 30;
+    const to = parseDate(req.query.to, new Date());
+    let from = parseDate(req.query.from, new Date(to.getTime() - 29 * 24 * 60 * 60 * 1000));
+    if (from > to) from = new Date(to.getTime() - 24 * 60 * 60 * 1000);
 
-    const from = new Date();
-    from.setDate(from.getDate() - days);
+    const tzRaw = Number(req.query.tzOffset);
+    const tzOffsetMin = Number.isFinite(tzRaw) ? tzRaw : 0;
 
-    const data = await dashboard(from);
+    const data = await dashboard({
+      from,
+      to,
+      tzOffsetMin,
+      campaignId: typeof req.query.campaignId === "string" && req.query.campaignId ? req.query.campaignId : undefined,
+      buyerId: typeof req.query.buyerId === "string" && req.query.buyerId ? req.query.buyerId : undefined,
+      provider: typeof req.query.provider === "string" && req.query.provider ? req.query.provider : undefined,
+      state: typeof req.query.state === "string" && req.query.state ? req.query.state : undefined,
+    });
     res.json(data);
   })
 );

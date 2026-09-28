@@ -51,21 +51,26 @@ export function LeadsView({
   }, [page, search]);
 
   return (
-    <div className="p-8 max-w-7xl mx-auto animate-in fade-in duration-150">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+    <div className="p-6 md:p-10 max-w-7xl mx-auto space-y-8 animate-in fade-in duration-200">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <span className="text-[10px] font-bold tracking-widest text-slate-400 uppercase">
-            LEAD MANAGEMENT
-          </span>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900 font-serif">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-7 h-7 rounded-lg bg-blue-600 text-white flex items-center justify-center shadow-sm">
+              <span className="text-xs font-bold font-mono">⚡</span>
+            </div>
+            <span className="text-[11px] font-extrabold tracking-wider text-slate-500 uppercase">
+              CALL INTAKE &amp; ROUTING
+            </span>
+          </div>
+          <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-slate-900">
             {title}
           </h1>
           <p className="text-xs text-slate-500 mt-1">
-            Click any lead row to open buyer routing and real-time RTB ping execution.
+            Click any lead row to launch the real-time buyer auction workspace and ping endpoints.
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
           <div className="relative">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
@@ -76,14 +81,14 @@ export function LeadsView({
                 setSearch(e.target.value);
                 setPage(1);
               }}
-              className="bg-white border border-slate-200 text-xs rounded-xl pl-9 pr-3 py-2 w-56 focus:outline-none focus:ring-2 focus:ring-slate-900 shadow-subtle"
+              className="bg-white border border-slate-200/90 text-xs rounded-xl pl-9 pr-3 py-2.5 w-56 focus:outline-none focus:ring-2 focus:ring-blue-600 shadow-2xs font-medium"
             />
           </div>
 
           <button
             onClick={loadLeads}
-            className="p-2 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-600 shadow-subtle transition-colors"
-            title="Refresh"
+            className="p-2.5 bg-white border border-slate-200/90 rounded-xl hover:bg-slate-50 text-slate-600 shadow-2xs transition-colors"
+            title="Refresh list"
           >
             <RefreshCw className="w-4 h-4" />
           </button>
@@ -91,7 +96,7 @@ export function LeadsView({
           {onNewLeadClick && (
             <button
               onClick={onNewLeadClick}
-              className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-medium text-xs rounded-xl transition-colors flex items-center gap-1.5 shadow-sm"
+              className="btn-primary inline-flex items-center gap-1.5 px-4 py-2.5 text-xs tracking-wider uppercase font-bold"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>Create Lead</span>
@@ -100,36 +105,37 @@ export function LeadsView({
         </div>
       </div>
 
-      {/* Table container matching screenshot 7 */}
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-subtle overflow-hidden">
+      {/* Table container inside Kukie card */}
+      <div className="kukie-card-static overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="border-b border-slate-100 text-[11px] font-semibold text-slate-500">
-                <th className="py-3.5 px-5">Phone</th>
+              <tr className="bg-slate-50/80 border-b border-slate-100 text-[11px] font-extrabold text-slate-500 uppercase tracking-wider whitespace-nowrap">
+                <th className="py-3.5 px-5">Caller Phone</th>
                 <th className="py-3.5 px-4">ZIP</th>
                 <th className="py-3.5 px-4">State</th>
                 <th className="py-3.5 px-5">Campaign</th>
-                <th className="py-3.5 px-5">Buyer</th>
-                <th className="py-3.5 px-4">Revenue</th>
+                <th className="py-3.5 px-5">Winning Buyer</th>
+                <th className="py-3.5 px-4">Bid Revenue</th>
                 <th className="py-3.5 px-4">Score</th>
                 <th className="py-3.5 px-5">Status</th>
-                <th className="py-3.5 px-5">Created</th>
-                <th className="py-3.5 px-4 text-right">Actions</th>
+                <th className="py-3.5 px-5">Created At</th>
+                <th className="py-3.5 px-4 text-right">Auction</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-xs">
               {loading && leads.length === 0 ? (
                 <tr>
                   <td colSpan={10} className="py-12 text-center text-slate-400">
-                    <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-slate-600" />
+                    <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-blue-600" />
                     Loading leads...
                   </td>
                 </tr>
               ) : leads.length === 0 ? (
                 <tr>
                   <td colSpan={10} className="py-12 text-center text-slate-400">
-                    No leads found. Submit a new lead to start routing.
+                    <p className="text-sm font-semibold text-slate-600">No leads submitted yet</p>
+                    <p className="text-xs text-slate-400 mt-1">Submit a caller from &quot;Submit Lead&quot; to test real buyer pings.</p>
                   </td>
                 </tr>
               ) : (
@@ -139,51 +145,46 @@ export function LeadsView({
                     <tr
                       key={lead.id}
                       onClick={() => onSelectLead(lead.id)}
-                      className="hover:bg-slate-50/80 cursor-pointer transition-colors group"
+                      className="hover:bg-blue-50/40 cursor-pointer transition-colors group"
                     >
-                      <td className="py-3.5 px-5 font-mono font-medium text-slate-900">
+                      <td className="py-3.5 px-5 font-mono font-bold text-slate-900">
                         {lead.phone}
                       </td>
-                      <td className="py-3.5 px-4 text-slate-600 font-mono">{lead.zip}</td>
-                      <td className="py-3.5 px-4 text-slate-700 font-medium">{lead.state}</td>
-                      <td className="py-3.5 px-5 font-medium text-slate-800">{lead.campaign}</td>
-                      <td className="py-3.5 px-5 text-slate-500 font-medium">{lead.buyer}</td>
-                      <td className="py-3.5 px-4 font-mono text-slate-700">
-                        ${lead.revenue?.toFixed(2) || "0.00"}
-                      </td>
-                      <td className="py-3.5 px-4 font-mono text-slate-700">{lead.score || 85}</td>
-                      <td className="py-3.5 px-5">
-                        <span
-                          className={`inline-block px-2.5 py-0.5 rounded-full text-[11px] font-semibold capitalize ${
-                            isSold
-                              ? "bg-slate-900 text-white"
-                              : "bg-slate-100 text-slate-600"
-                          }`}
-                        >
-                          {isSold ? "Sold" : "Submitted"}
+                      <td className="py-3.5 px-4 text-slate-600 font-mono font-medium">{lead.zip}</td>
+                      <td className="py-3.5 px-4 text-slate-700 font-bold">
+                        <span className="px-2 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-slate-700 text-[10px]">
+                          {lead.state}
                         </span>
                       </td>
-                      <td className="py-3.5 px-5 text-slate-400 text-[11px]">
+                      <td className="py-3.5 px-5 font-semibold text-slate-800">{lead.campaign || "—"}</td>
+                      <td className="py-3.5 px-5 text-slate-500 font-medium">{lead.buyer || "—"}</td>
+                      <td className="py-3.5 px-4 font-mono font-bold text-emerald-600">
+                        ${lead.revenue?.toFixed(2) || "0.00"}
+                      </td>
+                      <td className="py-3.5 px-4 font-mono text-slate-600">{lead.score ?? "—"}</td>
+                      <td className="py-3.5 px-5">
+                        <span
+                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold capitalize ${
+                            isSold
+                              ? "bg-emerald-50 text-emerald-700 border border-emerald-200/60"
+                              : "bg-blue-50 text-blue-700 border border-blue-200/60"
+                          }`}
+                        >
+                          {isSold ? "Sold" : "Available"}
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-5 text-slate-400 text-[11px] font-mono whitespace-nowrap">
                         {new Date(lead.createdAt).toLocaleDateString("en-US", {
                           month: "short",
                           day: "numeric",
-                          year: "numeric",
                           hour: "numeric",
                           minute: "2-digit",
                         })}
                       </td>
                       <td className="py-3.5 px-4 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onSelectLead(lead.id);
-                            }}
-                            className="text-slate-400 hover:text-slate-700 p-1"
-                          >
-                            <MoreHorizontal className="w-4 h-4" />
-                          </button>
-                          <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-slate-900 group-hover:translate-x-0.5 transition-all" />
+                        <div className="flex items-center justify-end gap-1.5 text-blue-600 font-semibold text-xs">
+                          <span>Route</span>
+                          <ChevronRight className="w-4 h-4 text-blue-500 group-hover:translate-x-1 transition-transform" />
                         </div>
                       </td>
                     </tr>

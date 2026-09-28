@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { apiRequest } from "@/lib/api";
-import { Plus, MoreHorizontal, Loader2, X, Trash2, Edit3, ArrowUpDown } from "lucide-react";
+import { Plus, Loader2, X, Trash2, Edit3, ArrowUpDown, Building2 } from "lucide-react";
 
 export function BuyersView() {
   const [buyers, setBuyers] = useState<any[]>([]);
@@ -109,110 +109,118 @@ export function BuyersView() {
   };
 
   return (
-    <div className="p-8 max-w-7xl mx-auto animate-in fade-in duration-150">
-      {/* Header matching Screenshot 4 */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+    <div className="p-6 md:p-10 max-w-7xl mx-auto space-y-8 animate-in fade-in duration-200">
+      {/* Header with Kukie style */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <span className="text-[10px] font-bold tracking-widest text-slate-400 uppercase">
-            BUYER MANAGEMENT
-          </span>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900 font-serif">
-            Buyers
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-7 h-7 rounded-lg bg-indigo-600 text-white flex items-center justify-center shadow-sm">
+              <span className="text-xs font-bold font-mono">#1</span>
+            </div>
+            <span className="text-[11px] font-extrabold tracking-wider text-slate-500 uppercase">
+              BUYER WATERFALL
+            </span>
+          </div>
+          <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-slate-900">
+            Buyer Accounts
           </h1>
           <p className="text-xs text-slate-500 mt-1">
-            Manage lead buyers with priority, weight, and status for routing.
+            Manage buyers, priority routing hierarchy, bid weights, and active distribution caps.
           </p>
         </div>
 
         <button
           onClick={openCreateModal}
-          className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-medium text-xs rounded-xl transition-colors flex items-center gap-1.5 shadow-sm"
+          className="btn-primary inline-flex items-center gap-2 px-5 py-2.5 text-xs tracking-wide uppercase font-bold"
         >
-          <Plus className="w-3.5 h-3.5" />
-          <span>Create buyer</span>
+          <Plus className="w-4 h-4" />
+          <span>Create Buyer</span>
         </button>
       </div>
 
-      {/* Table container matching Screenshot 4 */}
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-subtle overflow-hidden">
+      {/* Table container */}
+      <div className="kukie-card-static overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="border-b border-slate-100 text-[11px] font-semibold text-slate-500">
-                <th className="py-3.5 px-5">Buyer name</th>
+              <tr className="bg-slate-50/80 border-b border-slate-100 text-[11px] font-extrabold text-slate-500 uppercase tracking-wider whitespace-nowrap">
+                <th className="py-3.5 px-5">Buyer Name</th>
                 <th className="py-3.5 px-5">Company</th>
                 <th className="py-3.5 px-4">Provider</th>
                 <th className="py-3.5 px-4">
                   <div className="flex items-center gap-1">
-                    <span>Priority</span>
-                    <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                    <span>Priority Order</span>
+                    <ArrowUpDown className="w-3.5 h-3.5 text-slate-400" />
                   </div>
                 </th>
                 <th className="py-3.5 px-4">Weight</th>
-                <th className="py-3.5 px-4">Configs</th>
+                <th className="py-3.5 px-4">Active APIs</th>
                 <th className="py-3.5 px-5">Status</th>
-                <th className="py-3.5 px-4 text-right">Actions</th>
+                <th className="py-3.5 px-5 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-xs">
               {loading ? (
                 <tr>
                   <td colSpan={8} className="py-12 text-center text-slate-400">
-                    <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-slate-600" />
+                    <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-blue-600" />
                     Loading buyers...
                   </td>
                 </tr>
               ) : buyers.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="py-12 text-center text-slate-400">
-                    No buyers configured yet. Click "+ Create buyer" to add your first buyer.
+                    <p className="text-sm font-semibold text-slate-600">No buyers configured yet</p>
+                    <p className="text-xs text-slate-400 mt-1">Click &quot;Create Buyer&quot; to configure your first RTB buyer.</p>
                   </td>
                 </tr>
               ) : (
                 buyers.map((buyer) => {
                   const isActive = buyer.status === "ACTIVE";
                   return (
-                    <tr key={buyer.id} className="hover:bg-slate-50/70 transition-colors group">
-                      <td className="py-3.5 px-5 font-medium text-slate-900">
+                    <tr key={buyer.id} className="hover:bg-blue-50/40 transition-colors group">
+                      <td className="py-3.5 px-5 font-bold text-slate-900 whitespace-nowrap">
                         {buyer.name}
                       </td>
-                      <td className="py-3.5 px-5 text-slate-500">{buyer.company || "—"}</td>
-                      <td className="py-3.5 px-4">
-                        <span className="capitalize px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-medium text-[11px]">
+                      <td className="py-3.5 px-5 text-slate-500 font-medium">{buyer.company || "—"}</td>
+                      <td className="py-3.5 px-4 whitespace-nowrap">
+                        <span className="capitalize px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200/60 font-bold text-[10px]">
                           {buyer.provider || "generic"}
                         </span>
                       </td>
-                      <td className="py-3.5 px-4 font-mono font-semibold text-slate-800">
-                        {buyer.priority}
-                      </td>
-                      <td className="py-3.5 px-4 font-mono text-slate-600">{buyer.weight}</td>
-                      <td className="py-3.5 px-4 font-mono text-slate-500">
-                        {buyer._count?.configs || 0}
-                      </td>
-                      <td className="py-3.5 px-5">
-                        <span
-                          className={`inline-block px-2.5 py-0.5 rounded-full text-[11px] font-semibold capitalize ${
-                            isActive
-                              ? "bg-slate-900 text-white"
-                              : "bg-slate-100 text-slate-500"
-                          }`}
-                        >
-                          {isActive ? "Active" : "Inactive"}
+                      <td className="py-3.5 px-4 whitespace-nowrap">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200/60 font-extrabold text-[11px] font-mono">
+                          #{buyer.priority}
                         </span>
                       </td>
-                      <td className="py-3.5 px-4 text-right">
+                      <td className="py-3.5 px-4 font-mono font-bold text-slate-700">{buyer.weight}</td>
+                      <td className="py-3.5 px-4 font-mono font-medium text-slate-500">
+                        {buyer._count?.configs || 0}
+                      </td>
+                      <td className="py-3.5 px-5 whitespace-nowrap">
+                        <span
+                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold capitalize ${
+                            isActive
+                              ? "bg-emerald-50 text-emerald-700 border border-emerald-200/60"
+                              : "bg-slate-100 text-slate-500 border border-slate-200"
+                          }`}
+                        >
+                          {isActive ? "Active" : "Paused"}
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-5 text-right whitespace-nowrap">
                         <div className="flex items-center justify-end gap-1">
                           <button
                             onClick={() => openEditModal(buyer)}
-                            className="p-1.5 text-slate-400 hover:text-slate-800 rounded hover:bg-slate-100 transition-colors"
+                            className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                             title="Edit buyer"
                           >
                             <Edit3 className="w-3.5 h-3.5" />
                           </button>
                           <button
                             onClick={() => handleDelete(buyer.id, buyer.name)}
-                            className="p-1.5 text-slate-400 hover:text-red-600 rounded hover:bg-red-50 transition-colors"
-                            title="Remove buyer"
+                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                            title="Delete buyer"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -227,70 +235,77 @@ export function BuyersView() {
         </div>
       </div>
 
-      {/* Create / Edit Buyer Modal matching Screenshot 5 */}
+      {/* Create / Edit Buyer Modal with Kukie style */}
       {showModal && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150">
-          <div className="bg-white rounded-2xl w-full max-w-md shadow-popover overflow-hidden border border-slate-200">
-            <div className="p-6 border-b border-slate-100 flex items-start justify-between">
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in zoom-in-95 duration-150">
+          <div className="bg-white rounded-3xl w-full max-w-md shadow-popover overflow-hidden border border-white/80">
+            <div className="p-6 border-b border-slate-100 flex items-start justify-between bg-slate-50/50">
               <div>
-                <h3 className="text-lg font-bold text-slate-900 font-serif">
-                  {editingBuyer ? "Edit buyer" : "Create buyer"}
+                <div className="flex items-center gap-2 mb-1">
+                  <div className="w-6 h-6 rounded-lg bg-indigo-600 text-white flex items-center justify-center text-xs font-bold">
+                    #
+                  </div>
+                  <span className="text-[10px] font-extrabold tracking-wider text-slate-500 uppercase">
+                    BUYER PROFILE
+                  </span>
+                </div>
+                <h3 className="text-xl font-bold text-slate-900">
+                  {editingBuyer ? "Edit Buyer" : "Create Buyer"}
                 </h3>
-                <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                  Basic business details. Add technical RTB endpoints, API keys, and campaign
-                  assignments afterward from the RTB APIs section.
+                <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
+                  Basic business details. Configure RTB endpoints and campaign assignments in RTB APIs.
                 </p>
               </div>
               <button
                 onClick={() => setShowModal(false)}
-                className="text-slate-400 hover:text-slate-700 p-1"
+                className="text-slate-400 hover:text-slate-700 p-2 rounded-xl hover:bg-slate-100 transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             {error && (
-              <div className="mx-6 mt-4 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs">
+              <div className="mx-6 mt-4 p-3 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold">
                 {error}
               </div>
             )}
 
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Buyer name
+                <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">
+                  Buyer Name
                 </label>
                 <input
                   type="text"
-                  placeholder="Acme Insurance"
+                  placeholder="e.g. Buyer D12 New"
                   value={buyerName}
                   onChange={(e) => setBuyerName(e.target.value)}
                   required
-                  className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-slate-900 transition-all placeholder:text-slate-400"
+                  className="w-full px-4 py-2.5 bg-slate-50/60 border border-slate-200/90 rounded-2xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-600 focus:bg-white transition-all placeholder:text-slate-400"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">
                   Company
                 </label>
                 <input
                   type="text"
-                  placeholder="Acme Corp"
+                  placeholder="e.g. Home Insurance Group"
                   value={company}
                   onChange={(e) => setCompany(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-slate-900 transition-all placeholder:text-slate-400"
+                  className="w-full px-4 py-2.5 bg-slate-50/60 border border-slate-200/90 rounded-2xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-600 focus:bg-white transition-all placeholder:text-slate-400"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">
                   Provider
                 </label>
                 <select
                   value={provider}
                   onChange={(e) => setProvider(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-slate-900 transition-all text-slate-700 capitalize"
+                  className="w-full px-4 py-2.5 bg-slate-50/60 border border-slate-200/90 rounded-2xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-600 focus:bg-white transition-all text-slate-700 capitalize"
                 >
                   <option value="unset">unset</option>
                   <option value="ringba">Ringba</option>
@@ -299,80 +314,77 @@ export function BuyersView() {
                   <option value="ringfuel">Ringfuel</option>
                   <option value="intelhouse">IntelHouse</option>
                   <option value="callgrid">Call Grid</option>
-                  <option value="generic">Generic</option>
+                  <option value="generic">Generic RTB</option>
                 </select>
-                <p className="text-[10px] text-slate-400 mt-1">
-                  Which platform this buyer primarily integrates through. Technical endpoints/keys are set per-campaign in RTB configurations.
-                </p>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Priority
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">
+                    Priority Order
                   </label>
                   <input
                     type="number"
-                    min="1"
-                    max="9999"
+                    min={1}
                     value={priority}
                     onChange={(e) => setPriority(Number(e.target.value))}
                     required
-                    className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-slate-900 transition-all"
+                    className="w-full px-4 py-2.5 bg-slate-50/60 border border-slate-200/90 rounded-2xl text-xs font-mono font-bold focus:outline-none focus:ring-2 focus:ring-blue-600 focus:bg-white transition-all"
                   />
-                  <span className="text-[10px] text-slate-400 block mt-0.5">
-                    Lower = higher priority
+                  <span className="text-[10px] text-slate-400 mt-1 block">
+                    Lower number = higher call waterfall priority.
                   </span>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">
                     Weight
                   </label>
                   <input
                     type="number"
-                    min="0"
-                    max="10000"
+                    min={1}
+                    max={100}
                     value={weight}
                     onChange={(e) => setWeight(Number(e.target.value))}
                     required
-                    className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-slate-900 transition-all"
+                    className="w-full px-4 py-2.5 bg-slate-50/60 border border-slate-200/90 rounded-2xl text-xs font-mono font-bold focus:outline-none focus:ring-2 focus:ring-blue-600 focus:bg-white transition-all"
                   />
-                  <span className="text-[10px] text-slate-400 block mt-0.5">
-                    Distribution share
+                  <span className="text-[10px] text-slate-400 mt-1 block">
+                    1 - 100 round-robin weight.
                   </span>
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">
                   Status
                 </label>
                 <select
                   value={status}
                   onChange={(e) => setStatus(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-slate-900 transition-all text-slate-700"
+                  className="w-full px-4 py-2.5 bg-slate-50/60 border border-slate-200/90 rounded-2xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-600 focus:bg-white transition-all text-slate-700"
                 >
-                  <option value="ACTIVE">active</option>
-                  <option value="INACTIVE">inactive</option>
+                  <option value="ACTIVE">Active (Eligible for Pings)</option>
+                  <option value="PAUSED">Paused (Skipped in Routing)</option>
+                  <option value="CAPPED">Capped (Exceeded Daily Limit)</option>
                 </select>
               </div>
 
-              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
+              <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-2.5">
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  className="px-4 py-2 border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl text-xs font-medium transition-colors"
+                  className="px-4 py-2.5 border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl text-xs font-semibold transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-medium transition-colors flex items-center gap-1.5 shadow-sm disabled:opacity-50"
+                  className="btn-primary px-5 py-2.5 text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm disabled:opacity-50"
                 >
                   {submitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                  <span>{editingBuyer ? "Save changes" : "Create buyer"}</span>
+                  <span>{editingBuyer ? "Save Changes" : "Create Buyer"}</span>
                 </button>
               </div>
             </form>

@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { apiRequest } from "@/lib/api";
-import { Loader2 } from "lucide-react";
+import { Loader2, PlusCircle, ArrowRight, ShieldCheck, MapPin, Phone } from "lucide-react";
 
 interface SubmitLeadViewProps {
   onSuccess: (leadId: string) => void;
@@ -33,7 +33,7 @@ export function SubmitLeadView({ onSuccess }: SubmitLeadViewProps) {
       return;
     }
     if (!zip.trim()) {
-      setError("Please enter a ZIP code");
+      setError("Please enter a valid ZIP code");
       return;
     }
     if (!state) {
@@ -61,71 +61,89 @@ export function SubmitLeadView({ onSuccess }: SubmitLeadViewProps) {
   };
 
   return (
-    <div className="max-w-4xl mx-auto p-8 animate-in fade-in duration-150">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight text-slate-900 font-serif">
-          Submit Lead
+    <div className="max-w-4xl mx-auto p-6 md:p-10 space-y-8 animate-in fade-in duration-200">
+      <div>
+        <div className="flex items-center gap-2 mb-2">
+          <div className="w-7 h-7 rounded-lg bg-blue-600 text-white flex items-center justify-center shadow-sm">
+            <PlusCircle className="w-4 h-4" />
+          </div>
+          <span className="text-[11px] font-extrabold tracking-wider text-slate-500 uppercase">
+            CALL INTAKE
+          </span>
+        </div>
+        <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-slate-900">
+          Submit Lead for Auction
         </h1>
-        <p className="text-sm text-slate-500 mt-1">
-          Create a lead with customer information. Route it to buyers from My Leads.
+        <p className="text-xs text-slate-500 mt-1">
+          Create a live caller profile. Trigger concurrent RTB pings and route to top-priority buyers.
         </p>
       </div>
 
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-subtle p-8 max-w-xl">
-        <h2 className="text-base font-semibold text-slate-900">New Lead</h2>
-        <p className="text-xs text-slate-500 mt-1 mb-6">
-          Enter customer information. Route the lead to buyers from My Leads after creation.
-        </p>
+      <div className="kukie-card p-8 md:p-10 max-w-xl border border-white/90">
+        <div className="flex items-center justify-between pb-4 mb-6 border-b border-slate-100">
+          <div>
+            <h2 className="text-base font-bold text-slate-900">Caller Information</h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Enter customer details for buyer query string interpolation.
+            </p>
+          </div>
+          <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+            <Phone className="w-4 h-4" />
+          </div>
+        </div>
 
         {error && (
-          <div className="mb-5 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs">
+          <div className="mb-5 p-3 rounded-2xl bg-rose-50 border border-rose-200/80 text-rose-700 text-xs font-semibold">
             {error}
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-              Phone
+            <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">
+              Caller Phone Number
             </label>
             <input
               type="tel"
-              placeholder="10-digit phone"
+              placeholder="(555) 000-0000"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               maxLength={14}
               required
-              className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 transition-all placeholder:text-slate-400"
+              className="w-full px-4 py-2.5 bg-slate-50/60 border border-slate-200/90 rounded-2xl text-xs font-mono font-medium focus:outline-none focus:ring-2 focus:ring-blue-600 focus:bg-white transition-all placeholder:text-slate-400"
             />
+            <span className="text-[11px] text-slate-400 mt-1 block">
+              10 digits without country code. Automatically interpolated into &quot;&#123;caller_number&#125;&quot;.
+            </span>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                ZIP
+              <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">
+                ZIP Code
               </label>
               <input
                 type="text"
-                placeholder="ZIP code"
+                placeholder="e.g. 75001"
                 value={zip}
                 onChange={(e) => setZip(e.target.value)}
                 maxLength={10}
                 required
-                className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 transition-all placeholder:text-slate-400"
+                className="w-full px-4 py-2.5 bg-slate-50/60 border border-slate-200/90 rounded-2xl text-xs font-mono font-medium focus:outline-none focus:ring-2 focus:ring-blue-600 focus:bg-white transition-all placeholder:text-slate-400"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+              <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">
                 State
               </label>
               <select
                 value={state}
                 onChange={(e) => setState(e.target.value)}
                 required
-                className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 transition-all text-slate-700"
+                className="w-full px-4 py-2.5 bg-slate-50/60 border border-slate-200/90 rounded-2xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-600 focus:bg-white transition-all text-slate-700"
               >
-                <option value="">Select state</option>
+                <option value="">Select State</option>
                 {US_STATES.map((st) => (
                   <option key={st} value={st}>
                     {st}
@@ -135,19 +153,22 @@ export function SubmitLeadView({ onSuccess }: SubmitLeadViewProps) {
             </div>
           </div>
 
-          <div className="pt-2">
+          <div className="pt-3">
             <button
               type="submit"
               disabled={loading}
-              className="w-full sm:w-auto px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-medium text-xs rounded-xl transition-colors flex items-center justify-center gap-2 shadow-sm disabled:opacity-50"
+              className="btn-primary w-full py-3 text-xs tracking-wider uppercase font-bold flex items-center justify-center gap-2 disabled:opacity-50"
             >
               {loading ? (
                 <>
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  <span>Submitting...</span>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Submitting Lead...</span>
                 </>
               ) : (
-                <span>Create Lead</span>
+                <>
+                  <span>Create Lead &amp; Launch Routing</span>
+                  <ArrowRight className="w-4 h-4" />
+                </>
               )}
             </button>
           </div>

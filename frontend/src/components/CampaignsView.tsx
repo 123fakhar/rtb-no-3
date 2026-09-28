@@ -10,6 +10,12 @@ export function CampaignsView() {
   const [selectedCampaign, setSelectedCampaign] = useState<any | null>(null);
   const [campaignConfigs, setCampaignConfigs] = useState<any[]>([]);
   const [loadingConfigs, setLoadingConfigs] = useState(false);
+  const [showCreate, setShowCreate] = useState(false);
+  const [name, setName] = useState("");
+  const [vertical, setVertical] = useState("");
+  const [description, setDescription] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   const loadCampaigns = async () => {
     setLoading(true);
@@ -27,6 +33,32 @@ export function CampaignsView() {
     loadCampaigns();
   }, []);
 
+  const createCampaign = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    setFormError(null);
+    try {
+      await apiRequest("/api/campaigns", {
+        method: "POST",
+        body: JSON.stringify({
+          name: name.trim(),
+          vertical: vertical.trim(),
+          description: description.trim(),
+          active: true,
+        }),
+      });
+      setShowCreate(false);
+      setName("");
+      setVertical("");
+      setDescription("");
+      await loadCampaigns();
+    } catch (err: any) {
+      setFormError(err?.message || "Could not create campaign");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const openConfigureModal = async (c: any) => {
     setSelectedCampaign(c);
     setLoadingConfigs(true);
@@ -42,143 +74,107 @@ export function CampaignsView() {
   };
 
   return (
-    <div className="p-8 max-w-7xl mx-auto animate-in fade-in duration-150">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+    <div className="p-6 md:p-10 max-w-7xl mx-auto space-y-8 animate-in fade-in duration-200">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <span className="text-[10px] font-bold tracking-widest text-slate-400 uppercase">
-            CAMPAIGN MANAGEMENT
-          </span>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900 font-serif">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-7 h-7 rounded-lg bg-purple-600 text-white flex items-center justify-center shadow-sm">
+              <span className="text-xs font-bold">🎯</span>
+            </div>
+            <span className="text-[11px] font-extrabold tracking-wider text-slate-500 uppercase">
+              VERTICAL DIRECTORY
+            </span>
+          </div>
+          <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-slate-900">
             Campaign Configuration
           </h1>
           <p className="text-xs text-slate-500 mt-1 max-w-2xl">
-            Configure and activate built-in campaign templates. Campaign types are predefined by the
-            system — you configure endpoints, providers, and form fields.
+            Create a campaign vertical, then assign buyer endpoints to it.
           </p>
         </div>
-
         <button
           onClick={() => {
-            alert("Predefined campaign templates are ready. Configure any campaign by clicking on its row.");
+            setFormError(null);
+            setShowCreate(true);
           }}
-          className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-medium text-xs rounded-xl transition-colors flex items-center gap-1.5 shadow-sm"
+          className="btn-primary inline-flex items-center gap-1.5 px-4 py-2.5 text-xs"
         >
           <Plus className="w-3.5 h-3.5" />
-          <span>Add Campaign</span>
+          New campaign
         </button>
       </div>
 
-      {/* Table matching Screenshot 1 */}
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-subtle overflow-hidden">
+      {/* Table inside Kukie Card */}
+      <div className="kukie-card-static overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="border-b border-slate-100 text-[11px] font-semibold text-slate-500 whitespace-nowrap">
+              <tr className="bg-slate-50/80 border-b border-slate-100 text-[11px] font-extrabold text-slate-500 uppercase tracking-wider whitespace-nowrap">
                 <th className="py-3.5 px-5">Campaign Name</th>
                 <th className="py-3.5 px-4">Status</th>
-                <th className="py-3.5 px-4">RTB Provider</th>
-                <th className="py-3.5 px-4">Endpoint</th>
-                <th className="py-3.5 px-4">API Key</th>
-                <th className="py-3.5 px-4">Parameters</th>
                 <th className="py-3.5 px-4">RTB Ready</th>
-                <th className="py-3.5 px-4">Last Test</th>
+                <th className="py-3.5 px-4">Defaults Configured</th>
+                <th className="py-3.5 px-4">Vertical Category</th>
                 <th className="py-3.5 px-4 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-xs">
               {loading ? (
                 <tr>
-                  <td colSpan={9} className="py-12 text-center text-slate-400">
-                    <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-slate-600" />
+                  <td colSpan={6} className="py-12 text-center text-slate-400">
+                    <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-blue-600" />
                     Loading campaigns...
                   </td>
                 </tr>
               ) : campaigns.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-12 text-center text-slate-400">
+                  <td colSpan={6} className="py-12 text-center text-slate-400">
                     No campaigns found.
                   </td>
                 </tr>
               ) : (
                 campaigns.map((camp) => {
                   const isActive = camp.active !== false;
-                  const isRetreaver =
-                    camp.name === "Auto Insurance" ||
-                    camp.name === "Bathroom" ||
-                    camp.name === "Home Insurance" ||
-                    camp.name === "Pest Control";
-                  const providerName = isRetreaver ? "Retreaver" : "—";
-                  const hasEndpoint = isRetreaver;
-                  const hasApiKey = isRetreaver;
-                  const isRtbReady = isActive;
-
                   return (
                     <tr
                       key={camp.id}
                       onClick={() => openConfigureModal(camp)}
-                      className="hover:bg-slate-50/70 cursor-pointer transition-colors group"
+                      className="hover:bg-blue-50/40 cursor-pointer transition-colors group"
                     >
-                      <td className="py-3.5 px-5 font-semibold text-slate-900">
+                      <td className="py-3.5 px-5 font-bold text-slate-900">
                         {camp.name}
                       </td>
                       <td className="py-3.5 px-4">
                         <span
-                          className={`inline-block px-2.5 py-0.5 rounded-full text-[11px] font-semibold capitalize ${
+                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold capitalize ${
                             isActive
-                              ? "bg-slate-900 text-white"
-                              : "bg-slate-100 text-slate-500"
+                              ? "bg-emerald-50 text-emerald-700 border border-emerald-200/60"
+                              : "bg-slate-100 text-slate-500 border border-slate-200"
                           }`}
                         >
                           {isActive ? "Active" : "Inactive"}
                         </span>
                       </td>
-                      <td className="py-3.5 px-4 text-slate-600 font-medium">
-                        {providerName}
-                      </td>
                       <td className="py-3.5 px-4">
                         <span
-                          className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold ${
-                            hasEndpoint
-                              ? "bg-slate-900 text-white"
-                              : "bg-slate-100 text-slate-500"
+                          className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                            isActive
+                              ? "bg-blue-50 text-blue-700 border border-blue-200/60"
+                              : "bg-slate-100 text-slate-500 border border-slate-200"
                           }`}
                         >
-                          {hasEndpoint && <Check className="w-3 h-3" />}
-                          <span>{hasEndpoint ? "Yes" : "No"}</span>
+                          {isActive && <Check className="w-3 h-3" />}
+                          <span>{isActive ? "Ready" : "Disabled"}</span>
                         </span>
                       </td>
                       <td className="py-3.5 px-4">
-                        <span
-                          className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold ${
-                            hasApiKey
-                              ? "bg-slate-900 text-white"
-                              : "bg-slate-100 text-slate-500"
-                          }`}
-                        >
-                          {hasApiKey && <Check className="w-3 h-3" />}
-                          <span>{hasApiKey ? "Yes" : "No"}</span>
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-4">
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-slate-900 text-white">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200/60">
                           <Check className="w-3 h-3" />
-                          <span>Yes</span>
+                          <span>Predefined</span>
                         </span>
                       </td>
-                      <td className="py-3.5 px-4">
-                        <span
-                          className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold ${
-                            isRtbReady
-                              ? "bg-slate-900 text-white"
-                              : "bg-slate-100 text-slate-500"
-                          }`}
-                        >
-                          {isRtbReady && <Check className="w-3 h-3" />}
-                          <span>{isRtbReady ? "Yes" : "No"}</span>
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-4 text-slate-400 font-mono text-[11px]">
-                        Never
+                      <td className="py-3.5 px-4 font-medium text-slate-600">
+                        {camp.vertical}
                       </td>
                       <td className="py-3.5 px-4 text-right">
                         <button
@@ -186,9 +182,9 @@ export function CampaignsView() {
                             e.stopPropagation();
                             openConfigureModal(camp);
                           }}
-                          className="p-1 text-slate-400 hover:text-slate-700"
+                          className="px-3 py-1 bg-slate-50 hover:bg-blue-50 text-slate-600 hover:text-blue-600 border border-slate-200 rounded-lg text-xs font-semibold transition-colors"
                         >
-                          <MoreHorizontal className="w-4 h-4" />
+                          Configure
                         </button>
                       </td>
                     </tr>
@@ -200,6 +196,59 @@ export function CampaignsView() {
         </div>
       </div>
 
+      {showCreate && (
+        <div className="fixed inset-0 z-50 bg-slate-900/30 flex items-center justify-center p-4">
+          <form onSubmit={createCampaign} className="bg-white rounded-2xl w-full max-w-md border border-slate-200 shadow-popover">
+            <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+              <h3 className="text-lg font-bold text-slate-900">New campaign</h3>
+              <button type="button" onClick={() => setShowCreate(false)} className="text-slate-400 hover:text-slate-700 p-1">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-5 space-y-3">
+              {formError && <p className="text-xs text-rose-600">{formError}</p>}
+              <label className="block text-xs font-semibold text-slate-600">
+                Name
+                <input
+                  required
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Medicare"
+                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900"
+                />
+              </label>
+              <label className="block text-xs font-semibold text-slate-600">
+                Vertical
+                <input
+                  required
+                  value={vertical}
+                  onChange={(e) => setVertical(e.target.value)}
+                  placeholder="Insurance"
+                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900"
+                />
+              </label>
+              <label className="block text-xs font-semibold text-slate-600">
+                Description
+                <textarea
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  rows={3}
+                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900"
+                />
+              </label>
+            </div>
+            <div className="p-4 border-t border-slate-100 flex justify-end gap-2">
+              <button type="button" onClick={() => setShowCreate(false)} className="px-4 py-2 text-xs font-semibold text-slate-600">
+                Cancel
+              </button>
+              <button type="submit" disabled={saving} className="btn-primary px-4 py-2 text-xs disabled:opacity-50">
+                {saving ? "Saving..." : "Create campaign"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
       {/* Configure Campaign Modal matching Screenshot 2 */}
       {selectedCampaign && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
@@ -210,7 +259,7 @@ export function CampaignsView() {
                   Configure campaign
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  {selectedCampaign.name} — campaign type is fixed by the system.
+                  {selectedCampaign.name}
                 </p>
               </div>
               <button

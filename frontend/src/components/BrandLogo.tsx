@@ -4,28 +4,24 @@ import React from "react";
 
 export function BrandLogo({ subtitle = "ADMIN CONSOLE" }: { subtitle?: string }) {
   return (
-    <div className="flex flex-col items-center text-center p-4">
-      {/* Modern minimal seagull icon */}
-      <svg
-        className="w-12 h-12 text-slate-900 mb-2"
-        viewBox="0 0 64 64"
-        fill="currentColor"
-        xmlns="http://www.w3.org/2000/svg"
-      >
-        <path d="M12 36C22 28 32 20 48 16C42 22 36 29 32 38C26 33 20 33 12 36Z" />
-        <path d="M24 38C34 32 44 26 56 22C50 30 43 38 38 46C33 41 28 40 24 38Z" opacity="0.8" />
-      </svg>
-      <h1 className="text-sm font-semibold tracking-wider uppercase text-slate-900 font-serif">
-        SEAGULLS
-      </h1>
-      <span className="text-[9px] tracking-widest text-slate-500 uppercase font-sans">
-        COMMUNICATIONS
-      </span>
-      {subtitle && (
-        <span className="mt-4 inline-block px-2.5 py-0.5 rounded text-[10px] font-medium tracking-widest uppercase bg-slate-100 text-slate-700">
-          {subtitle}
-        </span>
-      )}
+    <div className="flex items-center gap-2.5 px-5 pt-5 pb-4 select-none">
+      <div className="w-9 h-9 rounded-xl border border-slate-200 bg-white text-slate-800 flex items-center justify-center">
+        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="3" fill="currentColor" />
+          <path d="M12 3v2" />
+          <path d="M12 19v2" />
+          <path d="M3 12h2" />
+          <path d="M19 12h2" />
+        </svg>
+      </div>
+      <div className="min-w-0">
+        <div className="text-[15px] font-bold tracking-tight text-slate-900 leading-none">
+          Seagulls<span className="text-slate-400">.rtb</span>
+        </div>
+        {subtitle && (
+          <div className="text-[10px] font-medium text-slate-400 mt-1 tracking-wide">{subtitle}</div>
+        )}
+      </div>
     </div>
   );
 }
