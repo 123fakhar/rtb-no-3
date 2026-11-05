@@ -18,6 +18,7 @@ import { RejectionsView } from "@/components/RejectionsView";
 import { ReportsView } from "@/components/ReportsView";
 import { CrmAnalyticsView } from "@/components/CrmAnalyticsView";
 import { UsersView } from "@/components/UsersView";
+import { AgentPerformanceView } from "@/components/AgentPerformanceView";
 import { BrandLogo } from "@/components/BrandLogo";
 import { Loader2, Shield, User, ArrowRight } from "lucide-react";
 
@@ -25,6 +26,37 @@ export default function HomePage() {
   const { user, token, loading, login, switchUserFast, isAdmin } = useAuth();
   const [currentTab, setCurrentTab] = useState<string>("dashboard");
   const [selectedRoutingLeadId, setSelectedRoutingLeadId] = useState<string | null>(null);
+  const routingHistory = React.useRef(false);
+
+  const openRoutingLead = (leadId: string) => {
+    setSelectedRoutingLeadId(leadId);
+    if (routingHistory.current) return;
+    window.history.pushState({ rtbRouting: leadId }, "");
+    routingHistory.current = true;
+  };
+
+  const closeRoutingLead = () => {
+    setSelectedRoutingLeadId(null);
+    if (!routingHistory.current) return;
+    routingHistory.current = false;
+    window.history.back();
+  };
+
+  React.useEffect(() => {
+    const onPopState = () => {
+      const marker = (window.history.state as { rtbRouting?: string } | null)?.rtbRouting;
+      if (marker) {
+        routingHistory.current = true;
+        setSelectedRoutingLeadId(marker);
+        return;
+      }
+      if (!routingHistory.current) return;
+      routingHistory.current = false;
+      setSelectedRoutingLeadId(null);
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
 
   // Login form state
   const [loginEmail, setLoginEmail] = useState("admin@rtb.local");
@@ -175,7 +207,7 @@ export default function HomePage() {
           {/* Admin Views */}
           {isAdmin && currentTab === "dashboard" && (
             <DashboardView
-              onOpenLead={(leadId) => setSelectedRoutingLeadId(leadId)}
+              onOpenLead={openRoutingLead}
               onNavigate={setCurrentTab}
             />
           )}
@@ -185,7 +217,7 @@ export default function HomePage() {
           {isAdmin && currentTab === "leads" && (
             <LeadsView
               title="Leads"
-              onSelectLead={(leadId) => setSelectedRoutingLeadId(leadId)}
+              onSelectLead={openRoutingLead}
               onNewLeadClick={() => setCurrentTab("submit-lead")}
             />
           )}
@@ -193,7 +225,7 @@ export default function HomePage() {
           {isAdmin && currentTab === "providers" && <ProvidersView />}
           {isAdmin && currentTab === "rejections" && <RejectionsView />}
           {isAdmin && currentTab === "reports" && (
-            <ReportsView onOpenLead={(leadId) => setSelectedRoutingLeadId(leadId)} />
+            <ReportsView onOpenLead={openRoutingLead} />
           )}
           {isAdmin && currentTab === "crm" && (
             <CrmListView
@@ -208,7 +240,7 @@ export default function HomePage() {
           {currentTab === "submit-lead" && (
             <SubmitLeadView
               onSuccess={(newLeadId) => {
-                setSelectedRoutingLeadId(newLeadId);
+                openRoutingLead(newLeadId);
                 setCurrentTab(isAdmin ? "leads" : "my-leads");
               }}
             />
@@ -216,7 +248,7 @@ export default function HomePage() {
           {currentTab === "my-leads" && (
             <LeadsView
               title="My Leads"
-              onSelectLead={(leadId) => setSelectedRoutingLeadId(leadId)}
+              onSelectLead={openRoutingLead}
               onNewLeadClick={() => setCurrentTab("submit-lead")}
             />
           )}
@@ -233,6 +265,7 @@ export default function HomePage() {
               onNewSubmissionClick={() => setCurrentTab("submit-crm")}
             />
           )}
+          {!isAdmin && currentTab === "my-performance" && <AgentPerformanceView />}
         </div>
       </main>
 
@@ -240,7 +273,7 @@ export default function HomePage() {
       {selectedRoutingLeadId && (
         <LeadBuyerRouting
           leadId={selectedRoutingLeadId}
-          onClose={() => setSelectedRoutingLeadId(null)}
+          onClose={closeRoutingLead}
         />
       )}
     </div>

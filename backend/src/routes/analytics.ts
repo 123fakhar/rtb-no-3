@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { asyncHandler } from "../lib/http";
 import { requireAdmin, requireAuth } from "../middleware/auth";
-import { agentPerformance, dashboard } from "../services/analytics";
+import { agentPerformance, dashboard, performanceForUser } from "../services/analytics";
 
 export const analyticsRouter = Router();
 
@@ -44,6 +44,18 @@ analyticsRouter.get(
  * GET /api/analytics/agents
  * Performance metrics for each agent across RTB leads and CRM submissions.
  */
+analyticsRouter.get(
+  "/me",
+  asyncHandler(async (req, res) => {
+    const performance = await performanceForUser(req.user!.id);
+    if (!performance) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+    res.json({ performance });
+  })
+);
+
 analyticsRouter.get(
   "/agents",
   requireAdmin,

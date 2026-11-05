@@ -9,6 +9,16 @@ export const leadsRouter = Router();
 
 leadsRouter.use(requireAuth);
 
+function maskPhone(phone: string) {
+  const digits = phone.replace(/\D/g, "");
+  if (digits.length <= 3) return "***";
+  return `***${digits.slice(3)}`;
+}
+
+function visiblePhone(role: string | undefined, phone: string) {
+  return role === "AGENT" ? maskPhone(phone) : phone;
+}
+
 const createLeadSchema = z.object({
   phone: z
     .string()
@@ -17,8 +27,7 @@ const createLeadSchema = z.object({
   zip: z
     .string()
     .trim()
-    .min(3)
-    .max(10),
+    .regex(/^\d{5}(?:-\d{4})?$/, "ZIP must be a 5-digit code"),
   state: z
     .string()
     .trim()
@@ -91,7 +100,7 @@ leadsRouter.get(
 
     const formatted = leads.map((lead) => ({
       id: lead.id,
-      phone: lead.phone,
+      phone: visiblePhone(req.user?.role, lead.phone),
       zip: lead.zip,
       state: lead.state,
       campaign: lead.campaign?.name ?? "—",
@@ -180,7 +189,40 @@ leadsRouter.get(
     });
     if (!lead) throw new HttpError(404, "Lead not found");
 
-    res.json({ lead });
+    res.json({
+      lead: {
+        ...lead,
+        phone: visiblePhone(req.user?.role, lead.phone),
+      },
+    });
+  })
+);
+
+const updateLeadSchema = z.object({
+  zip: z.string().trim().regex(/^\d{5}(?:-\d{4})?$/, "ZIP must be a 5-digit code"),
+  state: z
+    .string()
+    .trim()
+    .min(2)
+    .max(2)
+    .transform((s) => s.toUpperCase())
+    .optional(),
+});
+
+leadsRouter.patch(
+  "/:id",
+  asyncHandler(async (req, res) => {
+    const data = updateLeadSchema.parse(req.body);
+    const existing = await prisma.lead.findUnique({ where: { id: req.params.id } });
+    if (!existing) throw new HttpError(404, "Lead not found");
+    const lead = await prisma.lead.update({
+      where: { id: existing.id },
+      data: {
+        zip: data.zip,
+        ...(data.state ? { state: data.state } : {}),
+      },
+    });
+    res.json({ lead: { id: lead.id, zip: lead.zip, state: lead.state } });
   })
 );
 
@@ -214,15 +256,21 @@ leadsRouter.get(
     });
 
     // Recent routing history for this specific lead
-    const pings = await prisma.ping.findMany({
-      where: { leadId: lead.id },
-      orderBy: { createdAt: "desc" },
-      take: 50,
-      include: {
-        buyer: { select: { id: true, name: true, provider: true } },
-        config: { select: { id: true, name: true, provider: true, campaign: { select: { id: true, name: true } } } },
-      },
-    });
+    const [pings, approvedSales] = await Promise.all([
+      prisma.ping.findMany({
+        where: { leadId: lead.id },
+        orderBy: { createdAt: "desc" },
+        take: 50,
+        include: {
+          buyer: { select: { id: true, name: true, provider: true } },
+          config: { select: { id: true, name: true, provider: true, campaign: { select: { id: true, name: true } } } },
+        },
+      }),
+      prisma.crmEntry.findMany({
+        where: { leadId: lead.id, status: "APPROVED", buyerId: { not: null } },
+        select: { buyerId: true },
+      }),
+    ]);
 
     const formattedHistory = pings.map((p) => ({
       id: p.id,
@@ -266,7 +314,7 @@ leadsRouter.get(
     res.json({
       lead: {
         id: lead.id,
-        phone: lead.phone,
+        phone: visiblePhone(req.user?.role, lead.phone),
         zip: lead.zip,
         state: lead.state,
         campaign: lead.campaign?.name ?? "Auto Insurance",
@@ -277,6 +325,7 @@ leadsRouter.get(
       },
       buyers: groupedBuyers,
       history: formattedHistory,
+      soldBuyerIds: [...new Set(approvedSales.map((sale) => sale.buyerId).filter((id): id is string => Boolean(id)))],
     });
   })
 );

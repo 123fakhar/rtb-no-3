@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { apiRequest } from "@/lib/api";
+import React, { useEffect, useRef, useState } from "react";
+import { ApiError, apiRequest } from "@/lib/api";
 import {
   Phone,
   Search,
@@ -26,17 +26,23 @@ interface LeadBuyerRoutingProps {
 }
 
 export function LeadBuyerRouting({ leadId, onClose }: LeadBuyerRoutingProps) {
-  const [data, setData] = useState<{ lead: any; buyers: any[]; history: any[] } | null>(null);
+  const [data, setData] = useState<{ lead: any; buyers: any[]; history: any[]; soldBuyerIds?: string[] } | null>(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [pendingConfigs, setPendingConfigs] = useState<Set<string>>(new Set());
+  const [pendingRows, setPendingRows] = useState<
+    { configId: string; configName: string; buyerName: string; campaignName: string }[]
+  >([]);
   const [selectedPing, setSelectedPing] = useState<any | null>(null);
   const [copiedText, setCopiedText] = useState(false);
   const [showRawJson, setShowRawJson] = useState(true);
+  const [saleNotice, setSaleNotice] = useState<string | null>(null);
+  const [zipDraft, setZipDraft] = useState("");
+  const watchConfig = useRef<string | null>(null);
 
   const loadData = async () => {
     try {
-      const res = await apiRequest<{ lead: any; buyers: any[]; history: any[] }>(
+      const res = await apiRequest<{ lead: any; buyers: any[]; history: any[]; soldBuyerIds?: string[] }>(
         `/api/leads/${leadId}/routing`
       );
       setData(res);
@@ -53,20 +59,74 @@ export function LeadBuyerRouting({ leadId, onClose }: LeadBuyerRoutingProps) {
     return () => clearInterval(timer);
   }, [leadId]);
 
-  const handleSendPing = async (configId: string) => {
-    setPendingConfigs((prev) => new Set(prev).add(configId));
+  useEffect(() => {
+    const zip = data?.lead?.zip;
+    if (typeof zip === "string" && /^\d{5}(?:-\d{4})?$/.test(zip)) setZipDraft(zip);
+    else setZipDraft("");
+  }, [data?.lead?.id]);
+
+  const handleSendPing = async (config: any, buyer: any) => {
+    const alreadySold = (data?.soldBuyerIds ?? []).includes(buyer.id);
+    if (alreadySold) {
+      setSaleNotice("You already made a sale on this lead to this buyer");
+      return;
+    }
+    if (pendingConfigs.has(config.id)) return;
+
+    setPendingConfigs((prev) => new Set(prev).add(config.id));
+    setPendingRows((prev) => [
+      ...prev,
+      {
+        configId: config.id,
+        configName: config.name,
+        buyerName: buyer.name,
+        campaignName: config.campaignName,
+      },
+    ]);
     try {
-      await apiRequest(`/api/leads/${leadId}/ping/${configId}`, { method: "POST" });
+      const res = await apiRequest<{ ping: { id: string } }>(`/api/leads/${leadId}/ping/${config.id}`, {
+        method: "POST",
+      });
+      if (watchConfig.current === config.id) {
+        const detail = await apiRequest<{ ping: any }>(`/api/pings/${res.ping.id}`);
+        setSelectedPing(detail.ping);
+        watchConfig.current = null;
+      }
       await loadData();
     } catch (err) {
-      console.error("Ping error:", err);
+      if (watchConfig.current === config.id) watchConfig.current = null;
+      if (err instanceof ApiError && (err.status === 409 || err.message.includes("already made a sale"))) {
+        setSaleNotice(err.message);
+      }
       await loadData();
     } finally {
       setPendingConfigs((prev) => {
         const next = new Set(prev);
-        next.delete(configId);
+        next.delete(config.id);
         return next;
       });
+      setPendingRows((prev) => prev.filter((row) => row.configId !== config.id));
+    }
+  };
+
+  const formatTracking = (value: string) => {
+    const digits = value.replace(/\D/g, "");
+    const ten = digits.length === 11 && digits.startsWith("1") ? digits.slice(1) : digits;
+    if (ten.length === 10) return `+1 ${ten.slice(0, 3)} ${ten.slice(3, 6)} ${ten.slice(6)}`;
+    return value;
+  };
+
+  const saveZip = async () => {
+    const next = zipDraft.trim();
+    if (!/^\d{5}(?:-\d{4})?$/.test(next) || next === data?.lead?.zip) return;
+    try {
+      await apiRequest(`/api/leads/${leadId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ zip: next }),
+      });
+      await loadData();
+    } catch (err) {
+      console.error("Failed to save ZIP", err);
     }
   };
 
@@ -131,13 +191,32 @@ export function LeadBuyerRouting({ leadId, onClose }: LeadBuyerRoutingProps) {
               <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200/60">
                 {lead?.state || "US"}
               </span>
-              <span className="text-xs font-medium text-slate-500">
-                ZIP: {lead?.zip}
-              </span>
+              <label className="text-xs font-medium text-slate-500 flex items-center gap-1.5">
+                ZIP
+                <input
+                  value={zipDraft}
+                  onChange={(event) => setZipDraft(event.target.value)}
+                  onBlur={saveZip}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") event.currentTarget.blur();
+                  }}
+                  placeholder="60601"
+                  className={`w-20 rounded-lg border px-2 py-0.5 font-mono text-xs text-slate-800 ${
+                    /^\d{5}(?:-\d{4})?$/.test(zipDraft)
+                      ? "border-slate-200 bg-white"
+                      : "border-rose-300 bg-rose-50"
+                  }`}
+                />
+              </label>
             </div>
             <p className="text-xs text-slate-400 mt-0.5">
-              Lead #{lead?.id?.slice(-6) || "ID"} · Click a buyer campaign below to trigger real HTTP RTB ping
+              Lead #{lead?.id?.slice(-6) || "ID"} · Click buyers to bid. Open a result from the list on the right.
             </p>
+            {lead?.zip && !/^\d{5}(?:-\d{4})?$/.test(lead.zip) && (
+              <p className="text-xs text-rose-600 mt-1">
+                This lead has no usable ZIP, so buyers reject it. Enter the caller&apos;s 5-digit ZIP.
+              </p>
+            )}
           </div>
         </div>
 
@@ -195,10 +274,11 @@ export function LeadBuyerRouting({ leadId, onClose }: LeadBuyerRoutingProps) {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
                   {buyer.configs.map((config: any) => {
                     const isPending = pendingConfigs.has(config.id);
+                    const alreadySold = (data?.soldBuyerIds ?? []).includes(buyer.id);
                     return (
                       <button
                         key={config.id}
-                        onClick={() => handleSendPing(config.id)}
+                        onClick={() => handleSendPing(config, buyer)}
                         disabled={isPending}
                         className="kukie-card p-4 text-left flex flex-col justify-between h-28 group relative border border-white/90 hover:border-blue-300/80 transition-all cursor-pointer disabled:opacity-60"
                       >
@@ -225,6 +305,8 @@ export function LeadBuyerRouting({ leadId, onClose }: LeadBuyerRoutingProps) {
                             <span className="text-blue-600 font-bold animate-pulse text-[11px]">
                               Sending Ping...
                             </span>
+                          ) : alreadySold ? (
+                            <span className="text-amber-700 font-bold text-[11px]">Sale accepted</span>
                           ) : (
                             <span className="text-slate-500 group-hover:text-blue-600 font-bold text-[11px] flex items-center gap-1">
                               <span>Ping Buyer</span>
@@ -254,7 +336,30 @@ export function LeadBuyerRouting({ leadId, onClose }: LeadBuyerRoutingProps) {
           </div>
 
           <div className="flex-1 overflow-y-auto p-4 space-y-3">
-            {history.length === 0 ? (
+            {pendingRows.map((row) => (
+              <div
+                key={row.configId}
+                onClick={() => {
+                  watchConfig.current = row.configId;
+                }}
+                className="kukie-card p-3.5 border-blue-200 cursor-pointer"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-900">{row.campaignName || row.configName}</h4>
+                    <span className="text-[11px] text-slate-500 font-medium">{row.buyerName}</span>
+                  </div>
+                  <span className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-wider bg-blue-50 text-blue-700 border border-blue-200">
+                    processing
+                  </span>
+                </div>
+                <div className="mt-2 text-[11px] text-blue-600 font-bold flex items-center gap-1.5">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  Sending bid... click for the result
+                </div>
+              </div>
+            ))}
+            {history.length === 0 && pendingRows.length === 0 ? (
               <div className="text-center py-12 text-slate-400 text-xs">
                 No pings sent for this lead yet. Click any buyer endpoint on the left to trigger a real HTTP bid request.
               </div>
@@ -283,7 +388,7 @@ export function LeadBuyerRouting({ leadId, onClose }: LeadBuyerRoutingProps) {
                             : "bg-rose-50 text-rose-700 border border-rose-200/70"
                         }`}
                       >
-                        {isAccepted ? "reserved" : "rejected"}
+                        {isAccepted ? "bid" : "rejected"}
                       </span>
                     </div>
 
@@ -295,7 +400,7 @@ export function LeadBuyerRouting({ leadId, onClose }: LeadBuyerRoutingProps) {
                     {isAccepted && item.trackingNumber && (
                       <div className="mt-2 font-mono text-xs font-bold text-emerald-600 flex items-center gap-1.5 bg-emerald-50/60 px-2.5 py-1 rounded-lg">
                         <Phone className="w-3.5 h-3.5" />
-                        <span>{item.trackingNumber}</span>
+                        <span>{formatTracking(item.trackingNumber)}</span>
                       </div>
                     )}
 
@@ -312,109 +417,137 @@ export function LeadBuyerRouting({ leadId, onClose }: LeadBuyerRoutingProps) {
         </div>
       </div>
 
+      {saleNotice && (
+        <div
+          className="fixed inset-0 z-[80] bg-slate-900/40 flex items-center justify-center p-4"
+          onClick={() => setSaleNotice(null)}
+        >
+          <div
+            className="bg-white rounded-3xl w-full max-w-md shadow-popover border border-slate-200 p-6 text-center relative"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              onClick={() => setSaleNotice(null)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-700"
+              aria-label="Close"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <div className="text-5xl mb-3" aria-hidden="true">😢</div>
+            <h3 className="text-lg font-bold text-slate-900">{saleNotice}</h3>
+            <p className="text-sm text-slate-500 mt-2">
+              This buyer was not contacted again. You can still send this lead to other buyers.
+            </p>
+            <button
+              onClick={() => setSaleNotice(null)}
+              className="mt-5 btn-primary px-5 py-2 text-sm"
+            >
+              OK
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Ping Inspection Modal */}
       {selectedPing && (
-        <div className="fixed inset-0 z-60 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in zoom-in-95 duration-150">
-          <div className="bg-white rounded-3xl w-full max-w-lg shadow-popover overflow-hidden border border-white/80">
-            {/* Modal Header */}
-            <div className="p-6 pb-4 flex items-start justify-between bg-slate-50/50 border-b border-slate-100">
+        <div
+          className="fixed inset-0 z-[80] bg-slate-900/30 flex items-center justify-center p-4"
+          onClick={() => setSelectedPing(null)}
+        >
+          <div
+            className="bg-white rounded-2xl w-full max-w-lg shadow-popover overflow-hidden border border-slate-200 max-h-[90vh] overflow-y-auto"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="px-6 pt-5 pb-4 flex items-start justify-between gap-3">
               <div className="flex items-start gap-3">
                 {selectedPing.status === "RESERVED" ? (
-                  <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-600 border border-emerald-200 flex items-center justify-center shrink-0">
+                  <div className="w-9 h-9 rounded-full bg-emerald-50 text-emerald-500 flex items-center justify-center shrink-0">
                     <CheckCircle2 className="w-6 h-6" />
                   </div>
                 ) : (
-                  <div className="w-10 h-10 rounded-2xl bg-rose-50 text-rose-600 border border-rose-200 flex items-center justify-center shrink-0">
+                  <div className="w-9 h-9 rounded-full bg-rose-50 text-rose-500 flex items-center justify-center shrink-0">
                     <XCircle className="w-6 h-6" />
                   </div>
                 )}
                 <div>
-                  <h3 className="text-lg font-bold text-slate-900">
-                    {selectedPing.config?.name || selectedPing.buyer?.name || "Ping Transaction"}
+                  <h3 className="text-xl font-bold text-slate-900">
+                    {selectedPing.campaignName || selectedPing.configName || "Buyer"}
                   </h3>
-                  <p className="text-xs text-slate-500 mt-0.5">
+                  <p className="text-sm text-slate-500 mt-0.5">
                     {selectedPing.status === "RESERVED"
-                      ? "Buyer accepted — bid won"
-                      : "Buyer returned reject or offline response"}
+                      ? "Lead reserved — API call was successful"
+                      : "No bid — buyer did not accept this lead"}
                   </p>
                 </div>
               </div>
-
               <button
                 onClick={() => setSelectedPing(null)}
-                className="text-slate-400 hover:text-slate-700 p-2 rounded-xl hover:bg-slate-100 transition-colors"
+                className="text-slate-500 hover:text-slate-900 p-1"
+                aria-label="Close"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Reserved / Rejected Hero Card */}
-            <div className="p-6 pb-4">
+            <div className="px-6 pb-4">
               {selectedPing.status === "RESERVED" ? (
-                <div className="bg-blue-50/80 border border-blue-200/70 rounded-2xl p-5 text-center flex flex-col items-center">
-                  <span className="text-[10px] uppercase font-extrabold tracking-widest text-slate-500 mb-1">
-                    BUYER TRACKING NUMBER
+                <div className="bg-blue-50 border border-blue-100 rounded-2xl px-5 py-6 text-center">
+                  <span className="text-[11px] uppercase tracking-[0.18em] font-semibold text-slate-500">
+                    Tracking number
                   </span>
-                  {selectedPing.trackingNumber ? (
-                    <div className="flex items-center gap-2">
-                      <Phone className="w-5 h-5 text-blue-600" />
-                      <span className="text-xl font-bold text-blue-600 font-mono tracking-tight">
-                        {selectedPing.trackingNumber}
-                      </span>
+                  <div className="mt-2 flex items-center justify-center gap-2">
+                    <Phone className="w-5 h-5 text-blue-600" />
+                    <span className="text-2xl font-bold text-blue-600 tracking-tight">
+                      {selectedPing.trackingNumber
+                        ? formatTracking(selectedPing.trackingNumber)
+                        : "Accepted"}
+                    </span>
+                    {selectedPing.trackingNumber && (
                       <button
                         onClick={() => handleCopy(selectedPing.trackingNumber)}
-                        className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-white rounded-lg transition-colors ml-1"
+                        className="p-1.5 text-slate-400 hover:text-blue-600"
                         title="Copy number"
                       >
                         <Copy className="w-4 h-4" />
                       </button>
+                    )}
+                  </div>
+                  {copiedText && <span className="text-[11px] text-emerald-600 font-bold">Copied for the dialer</span>}
+                  {selectedPing.bid != null && (
+                    <div className="mt-2 text-lg font-semibold text-emerald-600">
+                      Payout: ${Number(selectedPing.bid).toFixed(2)}
                     </div>
-                  ) : (
-                    <span className="text-xs font-semibold text-slate-600">
-                      Accepted without static tracking number
-                    </span>
                   )}
-                  {copiedText && (
-                    <span className="text-[10px] text-emerald-600 mt-1 font-bold">Copied!</span>
+                  {selectedPing.trackingNumber && (
+                    <p className="mt-2 text-xs text-slate-500">
+                      Dial this number so the customer can talk to the buyer.
+                    </p>
                   )}
                 </div>
               ) : (
-                <div className="bg-rose-50/80 border border-rose-200/70 rounded-2xl p-4">
-                  <span className="text-[10px] uppercase font-extrabold tracking-widest text-rose-500 block mb-1">
-                    GENUINE REJECT REASON
+                <div className="bg-rose-50 border border-rose-100 rounded-2xl p-4">
+                  <span className="text-[11px] uppercase tracking-widest font-semibold text-rose-500">
+                    No bid
                   </span>
-                  <span className="text-xs font-bold text-rose-700 leading-relaxed block">
-                    {selectedPing.rejectReason || "Buyer did not accept bid"}
+                  <span className="text-sm font-semibold text-rose-700 leading-relaxed block mt-1">
+                    {selectedPing.rejectReason || "Buyer did not return a bid"}
                   </span>
                 </div>
               )}
             </div>
 
-            {/* Collapsible View Raw Response */}
             <div className="px-6 pb-6">
               <button
                 onClick={() => setShowRawJson(!showRawJson)}
-                className="w-full flex items-center justify-between py-2.5 text-xs font-bold text-slate-700 border-t border-slate-100 hover:text-blue-600 transition-colors"
+                className="w-full flex items-center justify-between py-3 text-sm font-medium text-slate-700 border border-slate-200 rounded-xl px-4 hover:bg-slate-50"
               >
-                <span>HTTP Payload &amp; Response Inspection</span>
+                <span>View Raw Response</span>
                 {showRawJson ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
               </button>
-
               {showRawJson && (
-                <div className="mt-2 bg-slate-900 rounded-2xl p-4 text-emerald-400 font-mono text-[11px] max-h-60 overflow-y-auto space-y-2">
-                  {selectedPing.requestUrl && (
-                    <div>
-                      <span className="text-slate-400 block text-[10px] font-bold uppercase">Request URL:</span>
-                      <span className="text-white break-all">{selectedPing.requestUrl}</span>
-                    </div>
-                  )}
-                  <div>
-                    <span className="text-slate-400 block text-[10px] font-bold uppercase">Response Body:</span>
-                    <pre className="whitespace-pre-wrap break-all text-xs">
-                      {JSON.stringify(selectedPing.responseBody || { message: "No response body recorded" }, null, 2)}
-                    </pre>
-                  </div>
-                </div>
+                <pre className="mt-3 bg-slate-50 border border-slate-200 rounded-xl p-4 text-slate-700 font-mono text-[11px] max-h-60 overflow-y-auto whitespace-pre-wrap break-all">
+                  {JSON.stringify(selectedPing.responseBody || { message: "No response body recorded" }, null, 2)}
+                </pre>
               )}
             </div>
           </div>

@@ -90,8 +90,9 @@ model Buyer {
   createdAt DateTime    @default(now())
   updatedAt DateTime    @updatedAt
 
-  configs   RtbConfig[]
-  pings     Ping[]
+  configs    RtbConfig[]
+  pings      Ping[]
+  crmEntries CrmEntry[]
 
   @@index([priority])
   @@index([status])
@@ -144,6 +145,7 @@ model Lead {
   updatedAt  DateTime   @updatedAt
 
   pings      Ping[]
+  crmEntries CrmEntry[]
 
   @@index([agentId])
   @@index([phone])
@@ -187,6 +189,11 @@ model CrmEntry {
   campaignId     String?
   campaign       Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
   comment        String    @default("")
+  leadId         String?
+  lead           Lead?     @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  buyerId        String?
+  buyer          Buyer?    @relation(fields: [buyerId], references: [id], onDelete: SetNull)
+  pingId         String?
   status         CrmStatus @default(PENDING)
   agentId        String
   agent          User      @relation(fields: [agentId], references: [id])
@@ -198,6 +205,9 @@ model CrmEntry {
   @@index([agentId])
   @@index([status])
   @@index([createdAt])
+  @@index([leadId])
+  @@index([buyerId])
+  @@index([pingId])
 }
 
 model ApiLog {

@@ -1,11 +1,36 @@
 import type { ParamPair, ProviderContext } from "./types";
 
+function clean(value: string | undefined | null): string {
+  if (!value || value === "undefined" || value === "null") return "";
+  return value;
+}
+
+/** 10-digit NANP number, or the original digits when it is not a US number. */
+export function tenDigitPhone(phone: string): string {
+  const digits = clean(phone).replace(/\D/g, "");
+  if (digits.length === 11 && digits.startsWith("1")) return digits.slice(1);
+  return digits;
+}
+
+/** 5-digit ZIP, or ZIP+4. The literal string "undefined" is not a ZIP. */
+export function postalCode(zip: string | undefined | null): string {
+  const match = clean(zip).match(/\d{5}(?:-\d{4})?/);
+  return match ? match[0] : "";
+}
+
+export function e164Phone(phone: string): string {
+  const ten = tenDigitPhone(phone);
+  return ten.length === 10 ? `+1${ten}` : clean(phone);
+}
+
 /** Token substitution for values like "{caller_number}". */
 export function applyTokens(template: string, lead: ProviderContext["lead"]): string {
   return template
-    .replaceAll("{caller_number}", lead.phone)
-    .replaceAll("{caller_zip}", lead.zip)
-    .replaceAll("{caller_state}", lead.state)
+    .replaceAll("{caller_number}", tenDigitPhone(lead.phone))
+    .replaceAll("{caller_zip}", postalCode(lead.zip))
+    .replaceAll("{caller_state}", clean(lead.state))
+    .replaceAll("{homeowner}", "yes")
+    .replaceAll("{property_type}", "single_family")
     .replaceAll("{placement_id}", "");
 }
 

@@ -22,6 +22,7 @@ export const providers: Record<string, ProviderAdapter> = {
   trackdrive: createGenericAdapter({
     key: "trackdrive",
     label: "TrackDrive",
+    apiKeyParam: "key",
     fields: [
       { key: "trafficSourceId", label: "Traffic Source ID" },
       { key: "trackdriveNumber", label: "TrackDrive Number" },

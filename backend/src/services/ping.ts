@@ -1,8 +1,13 @@
 import type { Campaign, Lead, RtbConfig } from "@prisma/client";
 import { config as appConfig } from "../config";
+import { HttpError } from "../lib/http";
 import { prisma } from "../lib/prisma";
 import { getProvider } from "../providers";
 import type { ParamPair, ProviderResult } from "../providers/types";
+
+/** Shown when an admin has already accepted this lead for the same buyer. */
+export const ALREADY_SOLD_MESSAGE = "You already made a sale on this lead to this buyer";
+export const ALREADY_SOLD_CODE = "ALREADY_SOLD";
 
 export interface PingInput {
   lead: Lead & { campaign: Campaign | null };
@@ -13,6 +18,15 @@ export interface PingInput {
 /** Execute a REAL buyer ping over HTTP and persist the genuine result. Never mocks fake numbers. */
 export async function executePing(input: PingInput) {
   const { lead, rtbConfig, agentId } = input;
+
+  const approvedSale = await prisma.crmEntry.findFirst({
+    where: { leadId: lead.id, buyerId: rtbConfig.buyerId, status: "APPROVED" },
+    select: { id: true },
+  });
+  if (approvedSale) {
+    throw new HttpError(409, ALREADY_SOLD_MESSAGE, ALREADY_SOLD_CODE);
+  }
+
   const adapter = getProvider(rtbConfig.provider);
 
   const started = Date.now();
@@ -28,7 +42,8 @@ export async function executePing(input: PingInput) {
       staticParams: (rtbConfig.staticParams as Record<string, string>) ?? {},
       headers: (rtbConfig.headers as Record<string, string>) ?? {},
       extra: (rtbConfig.extra as Record<string, unknown>) ?? {},
-      campaignDefaults: (lead.campaign?.defaults as Record<string, string>) ?? {},
+    campaignDefaults: ((rtbConfig as RtbConfig & { campaign?: { defaults?: Record<string, string> | null } | null }).campaign
+      ?.defaults as Record<string, string>) ?? {},
       lead: { phone: lead.phone, zip: lead.zip, state: lead.state },
     });
 
@@ -110,6 +125,11 @@ export async function executePing(input: PingInput) {
     };
   }
 
+  if (result.accepted && !result.trackingNumber) {
+    const dialer = dialerNumberFromConfig((rtbConfig.extra as Record<string, unknown>) ?? {});
+    if (dialer) result.trackingNumber = dialer;
+  }
+
   const durationMs = Date.now() - started;
 
   const ping = await prisma.ping.create({
@@ -143,18 +163,65 @@ export async function executePing(input: PingInput) {
     },
   });
 
-  if (result.accepted) {
-    await prisma.lead.update({
-      where: { id: lead.id },
-      data: {
-        status: "SOLD",
-        buyerId: rtbConfig.buyerId,
-        revenue: result.bid ?? 0,
-      },
-    });
+  if (result.accepted && ping.buyerId) {
+    try {
+      await recordBidForReview({
+        lead,
+        agentId,
+        buyerId: ping.buyerId,
+        buyerName: ping.buyer?.name ?? "Buyer",
+        pingId: ping.id,
+        campaignId: rtbConfig.campaignId,
+        bid: result.bid,
+        dialer: ping.trackingNumber,
+      });
+    } catch (err) {
+      console.error("Failed to queue the bid for CRM review", err);
+    }
   }
 
   return ping;
+}
+
+/** TrackDrive caller-number bids reserve the campaign DID. That is the number to dial. */
+function dialerNumberFromConfig(extra: Record<string, unknown>): string | null {
+  const raw = String(extra.trackdriveNumber || extra.providerCampaignId || "").trim();
+  const digits = raw.replace(/\D/g, "");
+  if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`;
+  if (digits.length === 10) return `+1${digits}`;
+  return null;
+}
+
+/** A winning bid waits in CRM. It is not a sale until an admin accepts it. */
+async function recordBidForReview(input: {
+  lead: { id: string; phone: string; zip: string };
+  agentId: string;
+  buyerId: string;
+  buyerName: string;
+  pingId: string;
+  campaignId: string | null;
+  bid: number | null;
+  dialer: string | null;
+}) {
+  const agent = await prisma.user.findUnique({ where: { id: input.agentId }, select: { name: true } });
+  const payout = input.bid != null ? `$${input.bid.toFixed(2)}` : "a bid";
+  const dialer = input.dialer || "the tracking number";
+  await prisma.crmEntry.create({
+    data: {
+      fronterName: agent?.name || "Agent",
+      customerName: `Caller ${input.lead.phone}`,
+      customerNumber: input.lead.phone,
+      customerZip: /^\d{5}/.test(input.lead.zip) ? input.lead.zip : "00000",
+      did: input.dialer ?? "",
+      campaignId: input.campaignId,
+      comment: `${payout} from ${input.buyerName}. Dial ${dialer} so the customer can talk to the buyer. This becomes a sale only if an admin accepts it.`,
+      leadId: input.lead.id,
+      buyerId: input.buyerId,
+      pingId: input.pingId,
+      agentId: input.agentId,
+      status: "PENDING",
+    },
+  });
 }
 
 /** Preview the URL a config would call for a lead, without sending anything. */

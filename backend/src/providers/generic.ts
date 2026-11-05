@@ -1,5 +1,5 @@
 import type { BuiltRequest, ProviderAdapter, ProviderContext, ProviderResult } from "./types";
-import { resolvedParams, withQuery } from "./url";
+import { e164Phone, postalCode, resolvedParams, tenDigitPhone, withQuery } from "./url";
 
 type Interpret = ProviderAdapter["interpret"];
 
@@ -20,19 +20,90 @@ export function createGenericAdapter(opts: {
     label: opts.label,
     fields: opts.fields ?? [],
     buildRequest(ctx: ProviderContext): BuiltRequest {
-      const pairs = resolvedParams(ctx);
-      if (opts.apiKeyParam && ctx.apiKey) {
+      const pairs = resolvedParams(ctx).filter(
+        (pair) => pair.value && !pair.value.includes("{") && pair.value !== "undefined"
+      );
+      const has = (key: string) => pairs.some((pair) => pair.key.toLowerCase() === key.toLowerCase());
+      const extraValue = (...keys: string[]) => {
+        for (const key of keys) {
+          const value = ctx.extra[key];
+          if (typeof value === "string" && value.trim()) return value.trim();
+        }
+        return "";
+      };
+
+      if (ctx.provider === "trackdrive") {
+        const trafficSourceId = extraValue("trafficSourceId", "publisherId");
+        if (trafficSourceId && !has("traffic_source_id")) {
+          pairs.push({ key: "traffic_source_id", value: trafficSourceId });
+        }
+        const trackdriveNumber = extraValue("trackdriveNumber", "providerCampaignId").replace(/\D/g, "");
+        if (trackdriveNumber && !has("trackdrive_number")) {
+          pairs.push({ key: "trackdrive_number", value: trackdriveNumber });
+        }
+        const postal = postalCode(ctx.lead.zip);
+        const state = ctx.lead.state && ctx.lead.state !== "undefined" ? ctx.lead.state.trim().toUpperCase() : "";
+        if (postal && !has("caller_zip")) pairs.push({ key: "caller_zip", value: postal });
+        if (postal && !has("zip")) pairs.push({ key: "zip", value: postal });
+        if (state && !has("caller_state")) pairs.push({ key: "caller_state", value: state });
+        if (state && !has("state")) pairs.push({ key: "state", value: state });
+      }
+
+      if (ctx.provider === "intelhouse") {
+        const publisherId = extraValue("publisherId");
+        const campaignId = extraValue("providerCampaignId", "campaignId");
+        if (publisherId && !has("publisher_id")) pairs.push({ key: "publisher_id", value: publisherId });
+        if (campaignId && !has("campaign_id")) pairs.push({ key: "campaign_id", value: campaignId });
+      }
+
+      if (ctx.provider === "ringfuel") {
+        const campaignKey = extraValue("campaignKey", "providerCampaignId");
+        if (campaignKey && !has("campaign_key")) pairs.push({ key: "campaign_key", value: campaignKey });
+        if (campaignKey && !has("campaignId")) pairs.push({ key: "campaignId", value: campaignKey });
+      }
+
+      if (ctx.provider === "ringba") {
+        const caller = e164Phone(ctx.lead.phone);
+        const cidIndex = pairs.findIndex((pair) => pair.key.toLowerCase() === "cid");
+        if (caller) {
+          if (cidIndex >= 0) pairs[cidIndex] = { key: "CID", value: caller };
+          else pairs.push({ key: "CID", value: caller });
+        }
+        const postal = postalCode(ctx.lead.zip);
+        if (postal && !has("zipcode")) pairs.push({ key: "zipcode", value: postal });
+        if (!has("exposecallerid")) pairs.push({ key: "exposecallerid", value: "Yes" });
+        const ten = tenDigitPhone(ctx.lead.phone);
+        if (ten && !has("caller_number")) pairs.push({ key: "caller_number", value: ten });
+      }
+
+      if (opts.apiKeyParam && ctx.apiKey && !has(opts.apiKeyParam)) {
         pairs.push({ key: opts.apiKeyParam, value: ctx.apiKey });
       }
-      if (ctx.method === "GET") {
-        return { url: withQuery(ctx.baseUrl, pairs), method: "GET", headers: { ...ctx.headers } };
+
+      if (ctx.provider === "intelhouse") {
+        const allowed = new Set(["caller_number", "caller_zip", "publisher_id", "campaign_id"]);
+        for (let i = pairs.length - 1; i >= 0; i -= 1) {
+          if (!allowed.has(pairs[i].key)) pairs.splice(i, 1);
+        }
       }
-      const body = Object.fromEntries(pairs.map((p) => [p.key, p.value]));
+      // Reference buyers are called with the query string on the URL.
+      // POST transfers use that same URL and an empty body.
+      const url = withQuery(ctx.baseUrl, pairs);
+      if (ctx.method === "GET") {
+        return { url, method: "GET", headers: { ...ctx.headers } };
+      }
+      if (ctx.provider === "ringba" || ctx.provider === "retreaver" || ctx.provider === "intelhouse" || ctx.provider === "ringfuel") {
+        return {
+          url,
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...ctx.headers },
+          body: Object.fromEntries(pairs.map((pair) => [pair.key, pair.value])),
+        };
+      }
       return {
-        url: ctx.baseUrl,
+        url,
         method: "POST",
-        headers: { "Content-Type": "application/json", ...ctx.headers },
-        body,
+        headers: { ...ctx.headers },
       };
     },
     interpret: opts.interpret ?? defaultInterpret,
@@ -57,30 +128,82 @@ export const defaultInterpret: Interpret = (body, httpStatus) => {
     b.success === true ||
     ping.success === true ||
     b.status === "accepted" ||
+    b.status === "reserved" ||
     ping.status === "accepted" ||
+    ping.status === "reserved" ||
     b.accepted === true;
 
-  const bidRaw = dig(body, ["bid"]) ?? dig(body, ["payout"]) ?? dig(body, ["price"]) ?? dig(body, ["ping", "bid"]);
+  const buyer0 = Array.isArray(b.buyers) ? (b.buyers[0] as Record<string, unknown> | undefined) : undefined;
+  const offerPayouts = (Array.isArray(b.buyers) ? b.buyers : [])
+    .map((buyer) => (buyer as Record<string, unknown>).offer_conversion_payout)
+    .map((value) => (typeof value === "number" ? value : value ? Number(value) : NaN))
+    .filter((value) => Number.isFinite(value));
+  const bidRaw =
+    dig(body, ["bid"]) ??
+    dig(body, ["payout"]) ??
+    dig(body, ["price"]) ??
+    dig(body, ["bidAmount"]) ??
+    dig(body, ["retreaver_payout"]) ??
+    dig(body, ["ping", "bid"]) ??
+    (offerPayouts.length ? Math.max(...offerPayouts) : undefined) ??
+    buyer0?.bid ??
+    buyer0?.payout ??
+    buyer0?.price ??
+    buyer0?.bid_amount;
   const bid = typeof bidRaw === "number" ? bidRaw : bidRaw ? Number(bidRaw) : null;
 
   const tracking =
     (dig(body, ["tracking_number"]) as string | undefined) ??
     (dig(body, ["trackingNumber"]) as string | undefined) ??
+    (dig(body, ["phoneNumber"]) as string | undefined) ??
+    (dig(body, ["inbound_number"]) as string | undefined) ??
+    (dig(body, ["phone_number"]) as string | undefined) ??
     (dig(body, ["ping", "tracking_number"]) as string | undefined) ??
+    (buyer0?.tracking_number as string | undefined) ??
+    (buyer0?.phone_number as string | undefined) ??
+    (buyer0?.phoneNumber as string | undefined) ??
+    (buyer0?.number as string | undefined) ??
     null;
 
+  const errorObject = b.error && typeof b.error === "object" ? (b.error as { message?: string }) : undefined;
+  const errorText = typeof b.error === "string" ? b.error : undefined;
+  const statusInfo = typeof b.status_info === "string" ? b.status_info : undefined;
+  const fieldErrors = b.errors && !Array.isArray(b.errors) && typeof b.errors === "object"
+    ? Object.entries(b.errors as Record<string, unknown>).map(([key, value]) => {
+        const text = Array.isArray(value) ? value.map(String).join(", ") : String(value);
+        return `${key}: ${text}`;
+      })
+    : [];
   const errors = (Array.isArray(b.errors) ? b.errors : Array.isArray(ping.errors) ? ping.errors : []) as unknown[];
   const rejectReason = success
     ? null
-    : errors.map(String).join("; ") ||
+    :       fieldErrors.join("; ") ||
+      errors.map(String).join("; ") ||
+      (typeof errorObject?.message === "string" ? errorObject.message : null) ||
       (typeof b.message === "string" ? b.message : null) ||
-      (typeof b.status === "string" && b.status !== "accepted" ? b.status : null) ||
+      errorText ||
+      (statusInfo && statusInfo !== "accepted" ? statusInfo : null) ||
+      (typeof b.status === "string" && b.status !== "accepted" && b.status !== "reserved" ? String(b.status) : null) ||
       (httpStatus >= 400 ? `HTTP ${httpStatus}` : "Rejected");
 
+  const numericBid = bid !== null && Number.isFinite(bid) ? bid : null;
+  const explicitReject =
+    b.success === false ||
+    ping.success === false ||
+    b.available === false ||
+    b.status === "rejected" ||
+    b.status === "no_matching_buyer";
+  const accepted =
+    httpStatus < 400 &&
+    !explicitReject &&
+    fieldErrors.length === 0 &&
+    !errorObject?.message &&
+    (Boolean(success) || numericBid !== null || Boolean(tracking));
+
   return {
-    accepted: Boolean(success) && httpStatus < 400,
-    bid: bid !== null && Number.isFinite(bid) ? bid : null,
+    accepted,
+    bid: numericBid,
     trackingNumber: tracking,
-    rejectReason: success ? null : rejectReason,
+    rejectReason: accepted ? null : rejectReason,
   };
 };

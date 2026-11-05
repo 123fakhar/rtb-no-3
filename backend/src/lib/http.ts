@@ -2,7 +2,7 @@ import { ZodError } from "zod";
 import type { NextFunction, Request, Response } from "express";
 
 export class HttpError extends Error {
-  constructor(public status: number, message: string) {
+  constructor(public status: number, message: string, public code?: string) {
     super(message);
   }
 }
@@ -24,7 +24,7 @@ export function errorMiddleware(err: unknown, _req: Request, res: Response, _nex
     return;
   }
   if (err instanceof HttpError) {
-    res.status(err.status).json({ error: err.message });
+    res.status(err.status).json({ error: err.message, code: err.code });
     return;
   }
   const prismaCode = (err as { code?: string }).code;

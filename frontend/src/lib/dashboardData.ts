@@ -91,7 +91,7 @@ export interface DashboardData {
     campaign: string;
     buyer: string;
     bid: number | null;
-    status: "WON" | "REJECTED" | "ERROR";
+    status: "WON" | "REJECTED" | "ERROR" | "BID";
     reason: string | null;
   }[];
   recentLeads: {

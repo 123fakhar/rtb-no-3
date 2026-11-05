@@ -4,6 +4,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { asyncHandler, HttpError } from "../lib/http";
 import { requireAdmin, requireAuth } from "../middleware/auth";
+import { syncLeadSale } from "../services/sale";
 
 export const crmRouter = Router();
 
@@ -199,6 +200,8 @@ crmRouter.patch(
         agent: { select: { id: true, name: true, email: true } },
       },
     });
+
+    if (existing.leadId) await syncLeadSale(existing.leadId);
 
     res.json({ entry: formatCrmEntry(updated, true) });
   })

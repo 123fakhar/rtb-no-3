@@ -47,6 +47,7 @@ export function Sidebar({ currentTab, onTabChange }: SidebarProps) {
   ];
 
   const agentNav = [
+    { id: "my-performance", label: "Agent Performance", icon: BarChart3 },
     { id: "submit-lead", label: "Submit Lead", icon: PlusCircle },
     { id: "my-leads", label: "My Leads", icon: Send },
     { id: "submit-crm", label: "Submit CRM", icon: FilePlus },

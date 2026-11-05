@@ -180,6 +180,12 @@ export async function dashboard(query: DashboardQuery) {
     }),
   ]);
 
+  const soldRows = await prisma.crmEntry.findMany({
+    where: { status: "APPROVED", pingId: { not: null } },
+    select: { pingId: true },
+  });
+  const soldPingIds = new Set(soldRows.map((row) => row.pingId).filter((id): id is string => Boolean(id)));
+
   const providerFilter = query.provider?.toLowerCase();
   const filteredPings = providerFilter
     ? pings.filter((p) => (p.config?.provider || p.buyer?.provider || "").toLowerCase() === providerFilter)
@@ -241,7 +247,7 @@ export async function dashboard(query: DashboardQuery) {
 
   for (const ping of filteredPings) {
     const bid = ping.bid == null ? null : money(ping.bid);
-    const won = ping.status === "RESERVED";
+    const won = soldPingIds.has(ping.id);
     const responded = ping.httpStatus != null && ping.httpStatus < 500;
     const valid = bid != null && bid > 0;
     const hard = isHardFailure(ping.httpStatus, ping.rejectReason);
@@ -324,7 +330,7 @@ export async function dashboard(query: DashboardQuery) {
     if (row) row.leads += 1;
   }
   for (const ping of filteredPings) {
-    if (ping.status !== "RESERVED") continue;
+    if (!soldPingIds.has(ping.id)) continue;
     const key = hourly ? localParts(ping.createdAt, tzOffsetMin).hour : localParts(ping.createdAt, tzOffsetMin).date;
     const row = series.get(key);
     if (!row) continue;
@@ -431,7 +437,7 @@ export async function dashboard(query: DashboardQuery) {
     .sort((a, b) => b.count - a.count);
 
   const activity = filteredPings.slice(0, 20).map((ping) => {
-    const won = ping.status === "RESERVED";
+    const won = soldPingIds.has(ping.id);
     const bid = ping.bid == null ? null : money(ping.bid);
     return {
       id: ping.id,
@@ -441,9 +447,9 @@ export async function dashboard(query: DashboardQuery) {
       phone: ping.lead?.phone ?? "",
       campaign: ping.config?.campaign?.name ?? ping.lead?.campaign?.name ?? "Unassigned",
       buyer: ping.buyer?.name ?? "Buyer",
-      bid: won || (bid != null && bid > 0) ? bid : null,
-      status: won ? "WON" : ping.status === "ERROR" ? "ERROR" : "REJECTED",
-      reason: won ? null : bucketReason(ping.rejectReason, ping.httpStatus),
+      bid: won || ping.status === "RESERVED" || (bid != null && bid > 0) ? bid : null,
+      status: won ? "WON" : ping.status === "RESERVED" ? "BID" : ping.status === "ERROR" ? "ERROR" : "REJECTED",
+      reason: won || ping.status === "RESERVED" ? null : bucketReason(ping.rejectReason, ping.httpStatus),
     };
   });
 
@@ -506,6 +512,35 @@ export async function dashboard(query: DashboardQuery) {
       providers: [...knownProviders].map((key) => ({ key, name: providerLabel(key) })).sort((a, b) => a.name.localeCompare(b.name)),
       states,
     },
+  };
+}
+
+/** Stats for a single signed-in user. Never includes other agents. */
+export async function performanceForUser(userId: string) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, name: true, email: true },
+  });
+  if (!user) return null;
+
+  const [leads, sold, revenueAgg, crmGroups] = await Promise.all([
+    prisma.lead.count({ where: { agentId: userId } }),
+    prisma.lead.count({ where: { agentId: userId, status: "SOLD" } }),
+    prisma.lead.aggregate({ where: { agentId: userId }, _sum: { revenue: true } }),
+    prisma.crmEntry.groupBy({ by: ["status"], where: { agentId: userId }, _count: true }),
+  ]);
+
+  const crm = { PENDING: 0, APPROVED: 0, REJECTED: 0 };
+  for (const row of crmGroups) crm[row.status] = row._count;
+  const revenue = Number(revenueAgg._sum.revenue ?? 0);
+
+  return {
+    ...user,
+    leads,
+    sold,
+    revenue,
+    conversionRate: leads ? Math.round((sold / leads) * 1000) / 10 : 0,
+    crm,
   };
 }
 

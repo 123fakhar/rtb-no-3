@@ -4,7 +4,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { asyncHandler, HttpError } from "../lib/http";
 import { requireAuth } from "../middleware/auth";
-import { executePing } from "../services/ping";
+import { ALREADY_SOLD_CODE, executePing } from "../services/ping";
 
 export const pingsRouter = Router();
 
@@ -120,6 +120,7 @@ pingsRouter.post(
           bid: null,
           trackingNumber: null,
           rejectReason: outcome.reason?.message ?? "Execution failed",
+          code: outcome.reason?.code ?? null,
           durationMs: 0,
           createdAt: new Date().toISOString(),
         };

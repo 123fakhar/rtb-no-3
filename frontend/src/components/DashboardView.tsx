@@ -517,9 +517,9 @@ function HealthCard({ health }: { health: DashboardData["health"] }) {
   );
 }
 
-function Outcome({ status }: { status: "WON" | "REJECTED" | "ERROR" | "OPEN" }) {
+function Outcome({ status }: { status: "WON" | "REJECTED" | "ERROR" | "OPEN" | "BID" }) {
   const won = status === "WON";
-  const open = status === "OPEN";
+  const open = status === "OPEN" || status === "BID";
   return (
     <span
       className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wider shrink-0 ${
@@ -530,7 +530,7 @@ function Outcome({ status }: { status: "WON" | "REJECTED" | "ERROR" | "OPEN" }) 
           : "bg-rose-50 text-rose-700 border border-rose-200/70"
       }`}
     >
-      {status === "WON" ? "Won" : status === "OPEN" ? "Open" : status === "ERROR" ? "Error" : "Rejected"}
+      {status === "WON" ? "Won" : status === "BID" ? "Bid" : status === "OPEN" ? "Open" : status === "ERROR" ? "Error" : "Rejected"}
     </span>
   );
 }
