@@ -57,26 +57,25 @@ export function Sidebar({ currentTab, onTabChange }: SidebarProps) {
   const navItems = isAdmin ? adminNav : agentNav;
 
   return (
-    <aside className="w-64 bg-white border-r border-slate-200/80 flex flex-col justify-between h-screen sticky top-0 shrink-0 select-none z-20">
+    <aside className="w-64 bg-[#0b1f3a] border-r border-[#08162b] flex flex-col justify-between h-screen sticky top-0 shrink-0 select-none z-20">
       <div className="flex flex-col flex-1 overflow-y-auto">
-        <BrandLogo subtitle={isAdmin ? "ADMIN PORTAL" : "AGENT PORTAL"} />
+        <BrandLogo subtitle={isAdmin ? "ADMIN PORTAL" : "AGENT PORTAL"} onDark />
 
         <div className="px-4 py-2">
-          {/* Fast switch between Admin and Agent for live inspection */}
-          <p className="px-3.5 mb-2 text-[11px] font-medium text-slate-400">Main Menu</p>
-          <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-2.5 mb-4 flex items-center justify-between text-xs">
+          <p className="px-3.5 mb-2 text-[11px] font-medium text-slate-300">Main Menu</p>
+          <div className="bg-white/10 border border-white/15 rounded-2xl p-2.5 mb-4 flex items-center justify-between text-xs">
             <div className="flex flex-col min-w-0 pr-2">
-              <span className="text-[10px] uppercase font-medium tracking-wider text-slate-400">
+              <span className="text-[10px] uppercase font-medium tracking-wider text-slate-300">
                 Active Session
               </span>
-              <span className="text-slate-800 font-semibold truncate text-xs">
+              <span className="text-white font-semibold truncate text-xs">
                 {user?.name}
               </span>
             </div>
             <button
               onClick={() => switchUserFast(isAdmin ? "AGENT" : "ADMIN")}
               title="Click to toggle between Admin and Agent"
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-[#1c2434] hover:text-white hover:border-transparent font-medium text-[11px] transition-all duration-150"
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/15 border border-white/20 text-white hover:bg-white hover:text-[#0b1f3a] font-medium text-[11px] transition-all duration-150"
             >
               <ArrowRightLeft className="w-3 h-3" />
               <span>{isAdmin ? "Agent" : "Admin"}</span>
@@ -93,11 +92,11 @@ export function Sidebar({ currentTab, onTabChange }: SidebarProps) {
                   onClick={() => onTabChange(item.id)}
                   className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-[13px] font-medium tracking-tight transition-all duration-150 ${
                     active
-                      ? "bg-slate-100 text-slate-900"
-                      : "text-slate-500 hover:text-slate-900 hover:bg-slate-50"
+                      ? "bg-white text-[#0b1f3a]"
+                      : "text-slate-200 hover:text-white hover:bg-white/10"
                   }`}
                 >
-                  <Icon className={`w-4 h-4 ${active ? "text-slate-800" : "text-slate-400"}`} />
+                  <Icon className={`w-4 h-4 ${active ? "text-[#0b1f3a]" : "text-slate-300"}`} />
                   <span>{item.label}</span>
                 </button>
               );
@@ -106,24 +105,24 @@ export function Sidebar({ currentTab, onTabChange }: SidebarProps) {
         </div>
       </div>
 
-      <div className="p-4 border-t border-slate-100/80 bg-white/80">
+      <div className="p-4 border-t border-white/10">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-slate-900 to-slate-700 text-white flex items-center justify-center font-bold text-xs shadow-xs shrink-0">
+            <div className="w-9 h-9 rounded-xl bg-white text-[#0b1f3a] flex items-center justify-center font-bold text-xs shrink-0">
               {user?.name ? user.name.slice(0, 2).toUpperCase() : "US"}
             </div>
             <div className="flex flex-col min-w-0">
-              <span className="text-xs font-bold text-slate-800 truncate">
+              <span className="text-xs font-bold text-white truncate">
                 {user?.name}
               </span>
-              <span className="text-[10px] text-slate-400 truncate">
+              <span className="text-[10px] text-slate-300 truncate">
                 {user?.email}
               </span>
             </div>
           </div>
           <button
             onClick={logout}
-            className="p-2 text-slate-400 hover:text-rose-600 rounded-xl hover:bg-rose-50 transition-colors"
+            className="p-2 text-slate-300 hover:text-rose-200 rounded-xl hover:bg-white/10 transition-colors"
             title="Log out"
           >
             <LogOut className="w-4 h-4" />

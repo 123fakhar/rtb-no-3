@@ -2,24 +2,26 @@
 
 import React from "react";
 
-export function BrandLogo({ subtitle = "ADMIN CONSOLE" }: { subtitle?: string }) {
+export function BrandLogo({
+  subtitle = "ADMIN CONSOLE",
+  onDark = false,
+}: {
+  subtitle?: string;
+  onDark?: boolean;
+}) {
   return (
     <div className="flex items-center gap-2.5 px-5 pt-5 pb-4 select-none">
-      <div className="w-9 h-9 rounded-xl border border-slate-200 bg-white text-slate-800 flex items-center justify-center">
-        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <circle cx="12" cy="12" r="3" fill="currentColor" />
-          <path d="M12 3v2" />
-          <path d="M12 19v2" />
-          <path d="M3 12h2" />
-          <path d="M19 12h2" />
-        </svg>
+      <div className="h-10 w-14 rounded-xl bg-white flex items-center justify-center shrink-0 overflow-hidden">
+        <img src="/seagull-logo.png" alt="Seagulls" className="h-8 w-auto object-contain" />
       </div>
       <div className="min-w-0">
-        <div className="text-[15px] font-bold tracking-tight text-slate-900 leading-none">
-          Seagulls<span className="text-slate-400">.rtb</span>
+        <div className={`text-[15px] font-bold tracking-tight leading-none ${onDark ? "text-white" : "text-slate-900"}`}>
+          Seagulls<span className={onDark ? "text-slate-300" : "text-slate-400"}>.rtb</span>
         </div>
         {subtitle && (
-          <div className="text-[10px] font-medium text-slate-400 mt-1 tracking-wide">{subtitle}</div>
+          <div className={`text-[10px] font-medium mt-1 tracking-wide ${onDark ? "text-slate-300" : "text-slate-400"}`}>
+            {subtitle}
+          </div>
         )}
       </div>
     </div>
