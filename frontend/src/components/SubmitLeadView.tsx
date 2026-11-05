@@ -113,7 +113,7 @@ export function SubmitLeadView({ onSuccess }: SubmitLeadViewProps) {
               className="w-full px-4 py-2.5 bg-slate-50/60 border border-slate-200/90 rounded-2xl text-xs font-mono font-medium focus:outline-none focus:ring-2 focus:ring-blue-600 focus:bg-white transition-all placeholder:text-slate-400"
             />
             <span className="text-[11px] text-slate-400 mt-1 block">
-              10 digits without country code. Automatically interpolated into &quot;&#123;caller_number&#125;&quot;.
+              10 digits, without a country code.
             </span>
           </div>
 

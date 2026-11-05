@@ -47,6 +47,15 @@ export function createGenericAdapter(opts: {
         if (postal && !has("zip")) pairs.push({ key: "zip", value: postal });
         if (state && !has("caller_state")) pairs.push({ key: "caller_state", value: state });
         if (state && !has("state")) pairs.push({ key: "state", value: state });
+        const caller = tenDigitPhone(ctx.lead.phone);
+        if (caller.length === 10) {
+          const callerNumber = pairs.findIndex((pair) => pair.key.toLowerCase() === "caller_number");
+          if (callerNumber >= 0) pairs[callerNumber] = { key: "caller_number", value: caller };
+          else pairs.push({ key: "caller_number", value: caller });
+          const callerId = pairs.findIndex((pair) => pair.key.toLowerCase() === "caller_id");
+          if (callerId >= 0) pairs[callerId] = { key: "caller_id", value: caller };
+          else pairs.push({ key: "caller_id", value: caller });
+        }
       }
 
       if (ctx.provider === "intelhouse") {

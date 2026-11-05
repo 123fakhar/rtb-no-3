@@ -527,7 +527,7 @@ export async function performanceForUser(userId: string) {
     prisma.lead.count({ where: { agentId: userId } }),
     prisma.lead.count({ where: { agentId: userId, status: "SOLD" } }),
     prisma.lead.aggregate({ where: { agentId: userId }, _sum: { revenue: true } }),
-    prisma.crmEntry.groupBy({ by: ["status"], where: { agentId: userId }, _count: true }),
+    prisma.crmEntry.groupBy({ by: ["status"], where: { agentId: userId, pingId: null }, _count: true }),
   ]);
 
   const crm = { PENDING: 0, APPROVED: 0, REJECTED: 0 };
@@ -554,7 +554,7 @@ export async function agentPerformance() {
     prisma.lead.groupBy({ by: ["agentId"], _count: true }),
     prisma.lead.groupBy({ by: ["agentId"], where: { status: "SOLD" }, _count: true }),
     prisma.lead.groupBy({ by: ["agentId"], _sum: { revenue: true } }),
-    prisma.crmEntry.groupBy({ by: ["agentId", "status"], _count: true }),
+    prisma.crmEntry.groupBy({ by: ["agentId", "status"], where: { pingId: null }, _count: true }),
   ]);
 
   const countOf = (rows: { agentId: string; _count: number }[]) => new Map(rows.map((r) => [r.agentId, r._count]));

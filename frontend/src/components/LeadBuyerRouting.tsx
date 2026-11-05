@@ -25,8 +25,16 @@ interface LeadBuyerRoutingProps {
   onClose: () => void;
 }
 
+type BuyerBlock = { buyerId: string; status: "APPROVED" | "REJECTED" };
+
+function blockMessage(status: "APPROVED" | "REJECTED") {
+  return status === "APPROVED"
+    ? "You already made a sale on this lead to this buyer"
+    : "This lead was already rejected for this buyer";
+}
+
 export function LeadBuyerRouting({ leadId, onClose }: LeadBuyerRoutingProps) {
-  const [data, setData] = useState<{ lead: any; buyers: any[]; history: any[]; soldBuyerIds?: string[] } | null>(null);
+  const [data, setData] = useState<{ lead: any; buyers: any[]; history: any[]; blockedBuyers?: BuyerBlock[] } | null>(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [pendingConfigs, setPendingConfigs] = useState<Set<string>>(new Set());
@@ -42,7 +50,7 @@ export function LeadBuyerRouting({ leadId, onClose }: LeadBuyerRoutingProps) {
 
   const loadData = async () => {
     try {
-      const res = await apiRequest<{ lead: any; buyers: any[]; history: any[]; soldBuyerIds?: string[] }>(
+      const res = await apiRequest<{ lead: any; buyers: any[]; history: any[]; blockedBuyers?: BuyerBlock[] }>(
         `/api/leads/${leadId}/routing`
       );
       setData(res);
@@ -65,10 +73,13 @@ export function LeadBuyerRouting({ leadId, onClose }: LeadBuyerRoutingProps) {
     else setZipDraft("");
   }, [data?.lead?.id]);
 
+  const buyerBlock = (buyerId: string) =>
+    (data?.blockedBuyers ?? []).find((entry) => entry.buyerId === buyerId);
+
   const handleSendPing = async (config: any, buyer: any) => {
-    const alreadySold = (data?.soldBuyerIds ?? []).includes(buyer.id);
-    if (alreadySold) {
-      setSaleNotice("You already made a sale on this lead to this buyer");
+    const block = buyerBlock(buyer.id);
+    if (block) {
+      setSaleNotice(blockMessage(block.status));
       return;
     }
     if (pendingConfigs.has(config.id)) return;
@@ -274,7 +285,7 @@ export function LeadBuyerRouting({ leadId, onClose }: LeadBuyerRoutingProps) {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
                   {buyer.configs.map((config: any) => {
                     const isPending = pendingConfigs.has(config.id);
-                    const alreadySold = (data?.soldBuyerIds ?? []).includes(buyer.id);
+                    const block = buyerBlock(buyer.id);
                     return (
                       <button
                         key={config.id}
@@ -305,8 +316,10 @@ export function LeadBuyerRouting({ leadId, onClose }: LeadBuyerRoutingProps) {
                             <span className="text-blue-600 font-bold animate-pulse text-[11px]">
                               Sending Ping...
                             </span>
-                          ) : alreadySold ? (
-                            <span className="text-amber-700 font-bold text-[11px]">Sale accepted</span>
+                          ) : block ? (
+                            <span className={`font-bold text-[11px] ${block.status === "APPROVED" ? "text-amber-700" : "text-rose-700"}`}>
+                              {block.status === "APPROVED" ? "Sale accepted" : "Rejected"}
+                            </span>
                           ) : (
                             <span className="text-slate-500 group-hover:text-blue-600 font-bold text-[11px] flex items-center gap-1">
                               <span>Ping Buyer</span>

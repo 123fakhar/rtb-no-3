@@ -5,7 +5,7 @@ function clean(value: string | undefined | null): string {
   return value;
 }
 
-/** 10-digit NANP number, or the original digits when it is not a US number. */
+/** 10-digit US caller ID. An 11-digit value starting with 1 drops the country code. */
 export function tenDigitPhone(phone: string): string {
   const digits = clean(phone).replace(/\D/g, "");
   if (digits.length === 11 && digits.startsWith("1")) return digits.slice(1);

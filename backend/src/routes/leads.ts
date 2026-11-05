@@ -4,6 +4,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { asyncHandler, HttpError } from "../lib/http";
 import { requireAuth } from "../middleware/auth";
+import { reviewedBuyerBlocksForPhone } from "../services/sale";
 
 export const leadsRouter = Router();
 
@@ -256,7 +257,7 @@ leadsRouter.get(
     });
 
     // Recent routing history for this specific lead
-    const [pings, approvedSales] = await Promise.all([
+    const [pings, blockedBuyers] = await Promise.all([
       prisma.ping.findMany({
         where: { leadId: lead.id },
         orderBy: { createdAt: "desc" },
@@ -266,10 +267,7 @@ leadsRouter.get(
           config: { select: { id: true, name: true, provider: true, campaign: { select: { id: true, name: true } } } },
         },
       }),
-      prisma.crmEntry.findMany({
-        where: { leadId: lead.id, status: "APPROVED", buyerId: { not: null } },
-        select: { buyerId: true },
-      }),
+      reviewedBuyerBlocksForPhone(lead.phone),
     ]);
 
     const formattedHistory = pings.map((p) => ({
@@ -325,7 +323,7 @@ leadsRouter.get(
       },
       buyers: groupedBuyers,
       history: formattedHistory,
-      soldBuyerIds: [...new Set(approvedSales.map((sale) => sale.buyerId).filter((id): id is string => Boolean(id)))],
+      blockedBuyers,
     });
   })
 );

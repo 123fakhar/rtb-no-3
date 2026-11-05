@@ -95,6 +95,7 @@ crmRouter.get(
     const agentFilter = !isAdmin && req.query.all !== "true" ? req.user!.id : agentId;
 
     const where: Prisma.CrmEntryWhereInput = {
+      pingId: null,
       ...(agentFilter ? { agentId: agentFilter } : {}),
       ...(campaignId ? { campaignId } : {}),
       ...(status && ["PENDING", "APPROVED", "REJECTED"].includes(status)
@@ -221,21 +222,26 @@ crmRouter.get(
       orderBy: { name: "asc" },
     });
 
+    const formOnly = { pingId: null };
     const [statusCounts, agentStats, campaignStats, dailyTrend] = await Promise.all([
       prisma.crmEntry.groupBy({
         by: ["status"],
+        where: formOnly,
         _count: true,
       }),
       prisma.crmEntry.groupBy({
         by: ["agentId", "status"],
+        where: formOnly,
         _count: true,
       }),
       prisma.crmEntry.groupBy({
         by: ["campaignId", "status"],
+        where: formOnly,
         _count: true,
       }),
       prisma.crmEntry.findMany({
         where: {
+          ...formOnly,
           createdAt: { gte: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000) },
         },
         select: { createdAt: true, status: true },

@@ -4,7 +4,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { asyncHandler, HttpError } from "../lib/http";
 import { requireAuth } from "../middleware/auth";
-import { ALREADY_SOLD_CODE, executePing } from "../services/ping";
+import { executePing } from "../services/ping";
 
 export const pingsRouter = Router();
 
