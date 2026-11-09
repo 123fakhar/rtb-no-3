@@ -9,7 +9,7 @@ interface Performance {
   email: string;
   leads: number;
   sold: number;
-  revenue: number;
+  revenue?: number;
   conversionRate: number;
   crm: { PENDING: number; APPROVED: number; REJECTED: number };
 }
@@ -37,7 +37,7 @@ export function AgentPerformanceView() {
     { label: "My leads", value: String(data.leads) },
     { label: "Sold", value: String(data.sold) },
     { label: "Conversion", value: `${data.conversionRate}%` },
-    { label: "Revenue", value: `$${data.revenue.toFixed(2)}` },
+    ...(typeof data.revenue === "number" ? [{ label: "Revenue", value: `$${data.revenue.toFixed(2)}` }] : []),
     { label: "CRM pending", value: String(data.crm.PENDING) },
     { label: "CRM approved", value: String(data.crm.APPROVED) },
     { label: "CRM rejected", value: String(data.crm.REJECTED) },
@@ -46,9 +46,9 @@ export function AgentPerformanceView() {
   return (
     <div className="p-6 md:p-10 max-w-7xl mx-auto space-y-8">
       <div>
-        <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-slate-900">Agent Performance</h1>
+        <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-slate-900">Closer Performance</h1>
         <p className="text-xs text-slate-500 mt-1">
-          {data.name} · only your leads and CRM results are shown here.
+          {data.name} · only your leads and CRM results are shown here. Revenue stays with the admin.
         </p>
       </div>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

@@ -17,9 +17,9 @@ async function main() {
   await prisma.user.deleteMany();
 
   const passwordHash = await bcrypt.hash("admin12345", 10);
-  const agentPasswordHash = await bcrypt.hash("agent12345", 10);
+  const managerPasswordHash = await bcrypt.hash("manager12345", 10);
+  const closerPasswordHash = await bcrypt.hash("closer12345", 10);
 
-  // 2. Create Admin user
   await prisma.user.create({
     data: {
       name: "Super Admin",
@@ -30,20 +30,28 @@ async function main() {
     },
   });
 
-  // 3. Create > 20 Agent IDs (25 active agent accounts)
-  for (let i = 1; i <= 25; i++) {
-    const num = i < 10 ? `0${i}` : `${i}`;
+  await prisma.user.create({
+    data: {
+      name: "Floor Manager",
+      email: "manager@rtb.local",
+      passwordHash: managerPasswordHash,
+      role: Role.MANAGER,
+      active: true,
+    },
+  });
+
+  for (let i = 1; i <= 30; i++) {
     await prisma.user.create({
       data: {
-        name: `Agent ${num}`,
-        email: `agent${i}@rtb.local`,
-        passwordHash: agentPasswordHash,
-        role: Role.AGENT,
+        name: `Closer ${i}`,
+        email: `closer${i}@rtb.local`,
+        passwordHash: closerPasswordHash,
+        role: Role.CLOSER,
         active: true,
       },
     });
   }
-  console.log("✅ Created Admin and 25 Agent accounts");
+  console.log("✅ Created admin, manager, and 30 closer accounts");
 
   const { syncReferenceCatalog } = await import("./sync-catalog");
   const counts = await syncReferenceCatalog(prisma);

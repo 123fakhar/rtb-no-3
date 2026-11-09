@@ -13,7 +13,6 @@ import {
   Send,
   LogOut,
   PlusCircle,
-  ArrowRightLeft,
   LineChart,
   Plug,
   AlertTriangle,
@@ -29,7 +28,7 @@ interface SidebarProps {
 }
 
 export function Sidebar({ currentTab, onTabChange }: SidebarProps) {
-  const { user, isAdmin, logout, switchUserFast } = useAuth();
+  const { user, isAdmin, isManager, logout } = useAuth();
 
   const adminNav = [
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -42,29 +41,38 @@ export function Sidebar({ currentTab, onTabChange }: SidebarProps) {
     { id: "rejections", label: "Rejections", icon: AlertTriangle },
     { id: "reports", label: "Reports", icon: LineChart },
     { id: "crm", label: "CRM", icon: ClipboardList },
+    { id: "sales-stats", label: "Sales Stats", icon: PieChart },
     { id: "crm-analytics", label: "CRM Analytics", icon: PieChart },
     { id: "settings", label: "Settings", icon: Settings },
   ];
 
-  const agentNav = [
-    { id: "my-performance", label: "Agent Performance", icon: BarChart3 },
+  const closerNav = [
+    { id: "my-performance", label: "Closer Performance", icon: BarChart3 },
     { id: "submit-lead", label: "Submit Lead", icon: PlusCircle },
     { id: "my-leads", label: "My Leads", icon: Send },
     { id: "submit-crm", label: "Submit CRM", icon: FilePlus },
     { id: "my-crm", label: "CRM Entries", icon: ClipboardList },
+    { id: "account", label: "My Account", icon: Settings },
   ];
 
-  const navItems = isAdmin ? adminNav : agentNav;
+  const managerNav = [
+    { id: "sales", label: "Sales", icon: ClipboardList },
+    { id: "sales-stats", label: "Sales Stats", icon: PieChart },
+    { id: "closers", label: "Closers", icon: Users },
+  ];
+
+  const navItems = isAdmin ? adminNav : isManager ? managerNav : closerNav;
+  const portal = isAdmin ? "ADMIN PORTAL" : isManager ? "MANAGER PORTAL" : "CLOSER PORTAL";
 
   return (
     <aside className="w-64 bg-[#0b1f3a] border-r border-[#08162b] flex flex-col justify-between h-screen sticky top-0 shrink-0 select-none z-20">
       <div className="flex flex-col flex-1 overflow-y-auto">
-        <BrandLogo subtitle={isAdmin ? "ADMIN PORTAL" : "AGENT PORTAL"} onDark />
+        <BrandLogo subtitle={portal} onDark />
 
         <div className="px-4 py-2">
           <p className="px-3.5 mb-2 text-[11px] font-medium text-slate-300">Main Menu</p>
-          <div className="bg-white/10 border border-white/15 rounded-2xl p-2.5 mb-4 flex items-center justify-between text-xs">
-            <div className="flex flex-col min-w-0 pr-2">
+          <div className="bg-white/10 border border-white/15 rounded-2xl p-2.5 mb-4 text-xs">
+            <div className="flex flex-col min-w-0">
               <span className="text-[10px] uppercase font-medium tracking-wider text-slate-300">
                 Active Session
               </span>
@@ -72,14 +80,6 @@ export function Sidebar({ currentTab, onTabChange }: SidebarProps) {
                 {user?.name}
               </span>
             </div>
-            <button
-              onClick={() => switchUserFast(isAdmin ? "AGENT" : "ADMIN")}
-              title="Click to toggle between Admin and Agent"
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/15 border border-white/20 text-white hover:bg-white hover:text-[#0b1f3a] font-medium text-[11px] transition-all duration-150"
-            >
-              <ArrowRightLeft className="w-3 h-3" />
-              <span>{isAdmin ? "Agent" : "Admin"}</span>
-            </button>
           </div>
 
           <nav className="space-y-1">

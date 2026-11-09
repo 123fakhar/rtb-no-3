@@ -4,11 +4,26 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { config } from "../config";
 import { asyncHandler, HttpError } from "../lib/http";
-import { requireAdmin, requireAuth } from "../middleware/auth";
+import { requireAdmin, requireAuth, requireSalesAccess } from "../middleware/auth";
 
 export const usersRouter = Router();
 
-usersRouter.use(requireAuth, requireAdmin);
+usersRouter.use(requireAuth);
+
+usersRouter.get(
+  "/closers",
+  requireSalesAccess,
+  asyncHandler(async (_req, res) => {
+    const users = await prisma.user.findMany({
+      where: { role: { in: ["CLOSER", "AGENT"] } },
+      select: userSelect,
+      orderBy: { name: "asc" },
+    });
+    res.json({ users });
+  })
+);
+
+usersRouter.use(requireAdmin);
 
 const userSelect = { id: true, name: true, email: true, role: true, active: true, createdAt: true } as const;
 
@@ -17,7 +32,8 @@ usersRouter.get(
   asyncHandler(async (req, res) => {
     const role = typeof req.query.role === "string" ? req.query.role : undefined;
     const users = await prisma.user.findMany({
-      where: role === "AGENT" || role === "ADMIN" ? { role } : undefined,
+      where:
+        role === "CLOSER" || role === "AGENT" || role === "ADMIN" || role === "MANAGER" ? { role } : undefined,
       select: userSelect,
       orderBy: { createdAt: "desc" },
     });
@@ -29,7 +45,7 @@ const createSchema = z.object({
   name: z.string().min(1).max(120),
   email: z.string().email(),
   password: z.string().min(8).max(200),
-  role: z.enum(["ADMIN", "AGENT"]).default("AGENT"),
+  role: z.enum(["ADMIN", "MANAGER", "CLOSER"]).default("CLOSER"),
 });
 
 usersRouter.post(
@@ -47,7 +63,7 @@ usersRouter.post(
 
 const updateSchema = z.object({
   name: z.string().min(1).max(120).optional(),
-  role: z.enum(["ADMIN", "AGENT"]).optional(),
+  role: z.enum(["ADMIN", "MANAGER", "CLOSER"]).optional(),
   active: z.boolean().optional(),
   password: z.string().min(8).max(200).optional(),
 });

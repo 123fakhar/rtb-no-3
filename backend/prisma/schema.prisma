@@ -9,6 +9,8 @@ datasource db {
 
 enum Role {
   ADMIN
+  MANAGER
+  CLOSER
   AGENT
 }
 

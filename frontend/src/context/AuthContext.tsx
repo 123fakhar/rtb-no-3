@@ -8,9 +8,11 @@ interface AuthContextType {
   token: string | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<User>;
-  switchUserFast: (role: "ADMIN" | "AGENT", email?: string) => Promise<User>;
+  updateProfile: (input: { name?: string; email?: string }) => Promise<User>;
   logout: () => void;
   isAdmin: boolean;
+  isManager: boolean;
+  isCloser: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -61,10 +63,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return res.user;
   };
 
-  const switchUserFast = async (role: "ADMIN" | "AGENT", agentEmail?: string): Promise<User> => {
-    const email = role === "ADMIN" ? "admin@rtb.local" : (agentEmail || "agent1@rtb.local");
-    const password = role === "ADMIN" ? "admin12345" : "agent12345";
-    return login(email, password);
+  const updateProfile = async (input: { name?: string; email?: string }): Promise<User> => {
+    const res = await apiRequest<{ token: string; user: User }>("/api/auth/profile", {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    });
+    setToken(res.token);
+    setStoredUser(res.user);
+    setUser(res.user);
+    setTokenState(res.token);
+    return res.user;
   };
 
   const logout = () => {
@@ -81,9 +89,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         token,
         loading,
         login,
-        switchUserFast,
+        updateProfile,
         logout,
         isAdmin: user?.role === "ADMIN",
+        isManager: user?.role === "MANAGER",
+        isCloser: user?.role === "CLOSER" || user?.role === "AGENT",
       }}
     >
       {children}

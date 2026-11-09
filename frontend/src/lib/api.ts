@@ -4,7 +4,7 @@ export interface User {
   id: string;
   name: string;
   email: string;
-  role: "ADMIN" | "AGENT";
+  role: "ADMIN" | "MANAGER" | "CLOSER" | "AGENT";
 }
 
 export class ApiError extends Error {

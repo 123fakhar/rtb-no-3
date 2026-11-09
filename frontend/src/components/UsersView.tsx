@@ -2,18 +2,16 @@
 
 import React, { useEffect, useState } from "react";
 import { apiRequest } from "@/lib/api";
-import { useAuth } from "@/context/AuthContext";
-import { Plus, UserPlus, Loader2, X, Shield, Users, ArrowRight } from "lucide-react";
+import { Plus, UserPlus, Loader2, X, Shield, Users } from "lucide-react";
 
 export function UsersView() {
-  const { switchUserFast } = useAuth();
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("agent12345");
-  const [role, setRole] = useState("AGENT");
+  const [password, setPassword] = useState("closer12345");
+  const [role, setRole] = useState("CLOSER");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -82,14 +80,14 @@ export function UsersView() {
               <Users className="w-4 h-4" />
             </div>
             <span className="text-[11px] font-extrabold tracking-wider text-slate-500 uppercase">
-              CALL CENTER AGENTS
+              CLOSER AND MANAGER ACCOUNTS
             </span>
           </div>
           <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-slate-900">
-            Users &amp; Agents ({users.length})
+            Users &amp; Closers ({users.length})
           </h1>
           <p className="text-xs text-slate-500 mt-1">
-            Provision and manage 25+ simultaneous agent accounts for real-time lead routing and CRM.
+            Create closers and managers. Only an admin can set or change a password.
           </p>
         </div>
 
@@ -181,14 +179,30 @@ export function UsersView() {
                       </td>
                       <td className="py-3.5 px-5 text-right whitespace-nowrap">
                         {!isAdminRole && (
-                          <button
-                            onClick={() => switchUserFast("AGENT", u.email)}
-                            className="inline-flex items-center gap-1 px-3 py-1 bg-white hover:bg-blue-600 hover:text-white border border-slate-200 hover:border-transparent rounded-xl text-blue-700 text-[11px] font-bold shadow-2xs transition-all active:scale-95"
-                            title="Log in immediately as this agent"
-                          >
-                            <span>Switch to Agent</span>
-                            <ArrowRight className="w-3 h-3" />
-                          </button>
+                          <div className="inline-flex items-center justify-end gap-1.5">
+                            <button
+                              onClick={async () => {
+                                const next = window.prompt(`New password for ${u.email} (at least 8 characters)`);
+                                if (!next) return;
+                                if (next.length < 8) {
+                                  alert("Password must be at least 8 characters");
+                                  return;
+                                }
+                                try {
+                                  await apiRequest(`/api/users/${u.id}`, {
+                                    method: "PATCH",
+                                    body: JSON.stringify({ password: next }),
+                                  });
+                                  alert("Password updated");
+                                } catch (err: any) {
+                                  alert(err.message || "Failed to update password");
+                                }
+                              }}
+                              className="px-3 py-1 bg-white hover:bg-slate-900 hover:text-white border border-slate-200 rounded-xl text-slate-700 text-[11px] font-bold transition-all"
+                            >
+                              Set password
+                            </button>
+                          </div>
                         )}
                       </td>
                     </tr>
@@ -286,8 +300,9 @@ export function UsersView() {
                   onChange={(e) => setRole(e.target.value)}
                   className="w-full px-4 py-2.5 bg-slate-50/60 border border-slate-200/90 rounded-2xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-600 focus:bg-white transition-all text-slate-800"
                 >
-                  <option value="AGENT">Agent (Masked CRM Phone Numbers)</option>
-                  <option value="ADMIN">Administrator (Full Access &amp; Unmasked)</option>
+                  <option value="CLOSER">Closer (masked phones, no revenue)</option>
+                  <option value="MANAGER">Manager (sees sales, cannot accept or reject)</option>
+                  <option value="ADMIN">Administrator (accept, reject, revenue, passwords)</option>
                 </select>
               </div>
 

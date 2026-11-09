@@ -546,7 +546,7 @@ export async function performanceForUser(userId: string) {
 
 export async function agentPerformance() {
   const agents = await prisma.user.findMany({
-    where: { role: "AGENT" },
+    where: { role: { in: ["CLOSER", "AGENT"] } },
     select: { id: true, name: true, email: true, active: true },
   });
 

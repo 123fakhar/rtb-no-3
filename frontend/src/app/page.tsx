@@ -19,58 +19,159 @@ import { ReportsView } from "@/components/ReportsView";
 import { CrmAnalyticsView } from "@/components/CrmAnalyticsView";
 import { UsersView } from "@/components/UsersView";
 import { AgentPerformanceView } from "@/components/AgentPerformanceView";
+import { SalesStatsView } from "@/components/SalesStatsView";
+import { ClosersView } from "@/components/ClosersView";
+import { AccountView } from "@/components/AccountView";
 import { BrandLogo } from "@/components/BrandLogo";
-import { Loader2, Shield, User, ArrowRight } from "lucide-react";
+import { Loader2, ArrowRight } from "lucide-react";
+
+type AppView = { tab: string; leadId: string | null };
+
+function defaultTab(role: string | undefined) {
+  if (role === "CLOSER" || role === "AGENT") return "submit-lead";
+  if (role === "MANAGER") return "sales";
+  return "dashboard";
+}
+
+function tabAllowed(tab: string, role: string | undefined) {
+  const shared = ["submit-lead", "my-leads", "submit-crm", "my-crm"];
+  if (shared.includes(tab)) return true;
+  if (role === "ADMIN") {
+    return [
+      "dashboard",
+      "analytics",
+      "leads",
+      "bids",
+      "buyers",
+      "campaigns",
+      "providers",
+      "rejections",
+      "reports",
+      "crm",
+      "sales-stats",
+      "crm-analytics",
+      "settings",
+    ].includes(tab);
+  }
+  if (role === "MANAGER") return ["sales", "sales-stats", "closers"].includes(tab);
+  return ["my-performance", "account"].includes(tab);
+}
+
+function sameUrl() {
+  return window.location.pathname + window.location.search;
+}
 
 export default function HomePage() {
-  const { user, token, loading, login, switchUserFast, isAdmin } = useAuth();
+  const { user, token, loading, login, isAdmin, isManager } = useAuth();
   const [currentTab, setCurrentTab] = useState<string>("dashboard");
   const [selectedRoutingLeadId, setSelectedRoutingLeadId] = useState<string | null>(null);
-  const routingHistory = React.useRef(false);
+  const viewRef = React.useRef<AppView>({ tab: "dashboard", leadId: null });
+  const indexRef = React.useRef(0);
+  const roleRef = React.useRef<string | undefined>(undefined);
+  const bootedRef = React.useRef(false);
 
-  const openRoutingLead = (leadId: string) => {
-    setSelectedRoutingLeadId(leadId);
-    if (routingHistory.current) return;
-    window.history.pushState({ rtbRouting: leadId }, "");
-    routingHistory.current = true;
+  const showView = (view: AppView) => {
+    viewRef.current = view;
+    setCurrentTab(view.tab);
+    setSelectedRoutingLeadId(view.leadId);
+  };
+
+  const writeHistory = (view: AppView, index: number, mode: "push" | "replace", guard = false) => {
+    const payload = {
+      ...(window.history.state || {}),
+      rtb: view,
+      rtbIndex: index,
+      rtbGuard: guard,
+    };
+    if (mode === "push") window.history.pushState(payload, "", sameUrl());
+    else window.history.replaceState(payload, "", sameUrl());
+  };
+
+  const goToTab = (tab: string) => {
+    if (viewRef.current.tab === tab && !viewRef.current.leadId) return;
+    const view = { tab, leadId: null };
+    indexRef.current += 1;
+    showView(view);
+    writeHistory(view, indexRef.current, "push");
+  };
+
+  const openRoutingLead = (leadId: string, tab = viewRef.current.tab) => {
+    if (viewRef.current.leadId === leadId && viewRef.current.tab === tab) return;
+    const view = { tab, leadId };
+    indexRef.current += 1;
+    showView(view);
+    writeHistory(view, indexRef.current, "push");
   };
 
   const closeRoutingLead = () => {
-    setSelectedRoutingLeadId(null);
-    if (!routingHistory.current) return;
-    routingHistory.current = false;
-    window.history.back();
+    const state = window.history.state as { rtb?: AppView; rtbIndex?: number } | null;
+    if (state?.rtb?.leadId && (state.rtbIndex ?? 0) > 0) {
+      window.history.back();
+      return;
+    }
+    const view = { tab: viewRef.current.tab, leadId: null };
+    showView(view);
+    writeHistory(view, state?.rtbIndex ?? indexRef.current, "replace");
   };
 
   React.useEffect(() => {
     const onPopState = () => {
-      const marker = (window.history.state as { rtbRouting?: string } | null)?.rtbRouting;
-      if (marker) {
-        routingHistory.current = true;
-        setSelectedRoutingLeadId(marker);
+      const state = window.history.state as { rtb?: AppView; rtbIndex?: number; rtbGuard?: boolean } | null;
+      if (!state?.rtb || state.rtbGuard) {
+        // Stay in this tab. Leaving the app history is what was opening the previous page elsewhere.
+        if (state?.rtbGuard) window.history.go(1);
+        else writeHistory(viewRef.current, indexRef.current, "push");
         return;
       }
-      if (!routingHistory.current) return;
-      routingHistory.current = false;
-      setSelectedRoutingLeadId(null);
+      const role = roleRef.current;
+      const view = tabAllowed(state.rtb.tab, role)
+        ? { tab: state.rtb.tab, leadId: state.rtb.leadId ?? null }
+        : { tab: defaultTab(role), leadId: null };
+      indexRef.current = state.rtbIndex ?? indexRef.current;
+      showView(view);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+      if (event.altKey || event.metaKey || event.ctrlKey || event.shiftKey) return;
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("input, textarea, select, [contenteditable='true']")) return;
+      event.preventDefault();
+      if (event.key === "ArrowLeft") window.history.back();
+      else window.history.forward();
     };
     window.addEventListener("popstate", onPopState);
-    return () => window.removeEventListener("popstate", onPopState);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("popstate", onPopState);
+      window.removeEventListener("keydown", onKey);
+    };
   }, []);
 
   // Login form state
-  const [loginEmail, setLoginEmail] = useState("admin@rtb.local");
-  const [loginPassword, setLoginPassword] = useState("admin12345");
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
   const [loginLoading, setLoginLoading] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
 
-  // Sync default tab on role switch
   React.useEffect(() => {
-    if (user?.role === "AGENT") {
-      setCurrentTab("submit-lead");
-    } else if (user?.role === "ADMIN") {
-      setCurrentTab("dashboard");
+    if (!user?.role) return;
+    const previousRole = roleRef.current;
+    roleRef.current = user.role;
+    const saved = window.history.state as { rtb?: AppView; rtbIndex?: number; rtbGuard?: boolean } | null;
+    if (!bootedRef.current && saved?.rtb && !saved.rtbGuard && tabAllowed(saved.rtb.tab, user.role)) {
+      bootedRef.current = true;
+      indexRef.current = saved.rtbIndex ?? 0;
+      showView({ tab: saved.rtb.tab, leadId: saved.rtb.leadId ?? null });
+      return;
     }
+    if (bootedRef.current && previousRole === user.role) return;
+    if (bootedRef.current && tabAllowed(viewRef.current.tab, user.role)) return;
+    bootedRef.current = true;
+    const view = { tab: defaultTab(user.role), leadId: null };
+    indexRef.current = 0;
+    showView(view);
+    writeHistory(view, 0, "replace", true);
+    writeHistory(view, 0, "push");
   }, [user?.role]);
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
@@ -161,36 +262,6 @@ export default function HomePage() {
               <span>Sign In to Workspace</span>
             </button>
           </form>
-
-          {/* Quick Demo Switcher */}
-          <div className="mt-8 pt-6 border-t border-slate-100">
-            <span className="text-[10px] uppercase font-bold tracking-widest text-slate-400 block text-center mb-3">
-              Fast Demo Switcher
-            </span>
-            <div className="grid grid-cols-2 gap-2.5">
-              <button
-                type="button"
-                onClick={() => switchUserFast("ADMIN")}
-                className="px-3.5 py-2.5 bg-slate-50 hover:bg-blue-50/80 border border-slate-200/80 hover:border-blue-200 rounded-2xl text-xs font-bold text-slate-700 hover:text-blue-700 flex items-center justify-center gap-1.5 transition-all"
-              >
-                <Shield className="w-3.5 h-3.5 text-blue-600" />
-                <span>Admin Demo</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => switchUserFast("AGENT", "agent1@rtb.local")}
-                className="px-3.5 py-2.5 bg-slate-50 hover:bg-blue-50/80 border border-slate-200/80 hover:border-blue-200 rounded-2xl text-xs font-bold text-slate-700 hover:text-blue-700 flex items-center justify-center gap-1.5 transition-all"
-              >
-                <User className="w-3.5 h-3.5 text-indigo-600" />
-                <span>Agent 1 Demo</span>
-              </button>
-            </div>
-            <div className="mt-3 text-center">
-              <span className="text-[11px] text-slate-400 font-medium">
-                25 concurrent agent accounts provisioned (agent1@rtb.local - agent25@rtb.local)
-              </span>
-            </div>
-          </div>
         </div>
       </div>
     );
@@ -199,7 +270,7 @@ export default function HomePage() {
   return (
     <div className="min-h-screen kukie-bg flex relative">
       {/* Sidebar */}
-      <Sidebar currentTab={currentTab} onTabChange={setCurrentTab} />
+      <Sidebar currentTab={currentTab} onTabChange={goToTab} />
 
       {/* Main Content Area */}
       <main className="flex-1 min-w-0 overflow-y-auto min-h-screen pb-20 bg-[#f5f6f8]">
@@ -208,7 +279,7 @@ export default function HomePage() {
           {isAdmin && currentTab === "dashboard" && (
             <DashboardView
               onOpenLead={openRoutingLead}
-              onNavigate={setCurrentTab}
+              onNavigate={goToTab}
             />
           )}
           {isAdmin && currentTab === "analytics" && <AnalyticsView />}
@@ -218,7 +289,7 @@ export default function HomePage() {
             <LeadsView
               title="Leads"
               onSelectLead={openRoutingLead}
-              onNewLeadClick={() => setCurrentTab("submit-lead")}
+              onNewLeadClick={() => goToTab("submit-lead")}
             />
           )}
           {isAdmin && currentTab === "bids" && <TransactionsView />}
@@ -230,18 +301,22 @@ export default function HomePage() {
           {isAdmin && currentTab === "crm" && (
             <CrmListView
               title="CRM"
-              onNewSubmissionClick={() => setCurrentTab("submit-crm")}
+              onNewSubmissionClick={() => goToTab("submit-crm")}
             />
           )}
+          {isAdmin && currentTab === "sales-stats" && <SalesStatsView />}
           {isAdmin && currentTab === "crm-analytics" && <CrmAnalyticsView />}
           {isAdmin && currentTab === "settings" && <UsersView />}
+
+          {isManager && currentTab === "sales" && <CrmListView title="Sales" />}
+          {isManager && currentTab === "sales-stats" && <SalesStatsView />}
+          {isManager && currentTab === "closers" && <ClosersView />}
 
           {/* Agent Views */}
           {currentTab === "submit-lead" && (
             <SubmitLeadView
               onSuccess={(newLeadId) => {
-                openRoutingLead(newLeadId);
-                setCurrentTab(isAdmin ? "leads" : "my-leads");
+                openRoutingLead(newLeadId, isAdmin ? "leads" : "my-leads");
               }}
             />
           )}
@@ -249,23 +324,24 @@ export default function HomePage() {
             <LeadsView
               title="My Leads"
               onSelectLead={openRoutingLead}
-              onNewLeadClick={() => setCurrentTab("submit-lead")}
+              onNewLeadClick={() => goToTab("submit-lead")}
             />
           )}
           {currentTab === "submit-crm" && (
             <CrmFormView
               onSuccess={() => {
-                setCurrentTab(isAdmin ? "crm" : "my-crm");
+                goToTab(isAdmin ? "crm" : isManager ? "sales" : "my-crm");
               }}
             />
           )}
           {currentTab === "my-crm" && (
             <CrmListView
               title="My CRM Submissions"
-              onNewSubmissionClick={() => setCurrentTab("submit-crm")}
+              onNewSubmissionClick={() => goToTab("submit-crm")}
             />
           )}
-          {!isAdmin && currentTab === "my-performance" && <AgentPerformanceView />}
+          {!isAdmin && !isManager && currentTab === "my-performance" && <AgentPerformanceView />}
+          {!isAdmin && !isManager && currentTab === "account" && <AccountView />}
         </div>
       </main>
 

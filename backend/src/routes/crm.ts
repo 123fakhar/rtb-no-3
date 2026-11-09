@@ -3,7 +3,7 @@ import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { asyncHandler, HttpError } from "../lib/http";
-import { requireAdmin, requireAuth } from "../middleware/auth";
+import { requireAdmin, requireAuth, requireSalesAccess } from "../middleware/auth";
 import { syncLeadSale } from "../services/sale";
 
 export const crmRouter = Router();
@@ -11,7 +11,7 @@ export const crmRouter = Router();
 crmRouter.use(requireAuth);
 
 const createCrmSchema = z.object({
-  fronterName: z.string().trim().min(1, "Fronter's Name is required").max(120),
+  fronterName: z.string().trim().min(1, "Agent name is required").max(120),
   customerName: z.string().trim().min(1, "Customer Name is required").max(120),
   customerNumber: z
     .string()
@@ -53,7 +53,7 @@ function formatCrmEntry(entry: any, isAdmin: boolean) {
     id: entry.id,
     fronterName: entry.fronterName,
     customerName: entry.customerName,
-    // Agent portal: first 3 numbers hidden. Admin portal: not hidden.
+    // Closers see a masked phone. Managers and admins see the full number.
     customerNumber: isAdmin ? entry.customerNumber : maskCustomerNumber(entry.customerNumber),
     customerNumberMasked: maskCustomerNumber(entry.customerNumber),
     customerZip: entry.customerZip,
@@ -65,7 +65,7 @@ function formatCrmEntry(entry: any, isAdmin: boolean) {
     comment: entry.comment,
     status: entry.status, // PENDING (yellow), APPROVED (green), REJECTED (red)
     agentId: entry.agentId,
-    agentName: entry.agent?.name ?? "Agent",
+    agentName: entry.agent?.name ?? "Closer",
     agentEmail: entry.agent?.email ?? "",
     reviewedById: entry.reviewedById,
     reviewedAt: entry.reviewedAt ? entry.reviewedAt.toISOString() : null,
@@ -82,6 +82,7 @@ crmRouter.get(
   "/",
   asyncHandler(async (req, res) => {
     const isAdmin = req.user!.role === "ADMIN";
+    const seeAll = isAdmin || req.user!.role === "MANAGER";
     const page = Math.max(1, Number(req.query.page ?? 1));
     const limit = Math.min(100, Math.max(1, Number(req.query.limit ?? 25)));
     const skip = (page - 1) * limit;
@@ -92,7 +93,7 @@ crmRouter.get(
     const agentId = typeof req.query.agentId === "string" ? req.query.agentId : undefined;
 
     // Filter by agent for non-admin if viewing their own, or allow agent to see their submissions
-    const agentFilter = !isAdmin && req.query.all !== "true" ? req.user!.id : agentId;
+    const agentFilter = !seeAll && req.query.all !== "true" ? req.user!.id : agentId;
 
     const where: Prisma.CrmEntryWhereInput = {
       pingId: null,
@@ -129,7 +130,7 @@ crmRouter.get(
     ]);
 
     res.json({
-      entries: entries.map((e) => formatCrmEntry(e, isAdmin)),
+      entries: entries.map((e) => formatCrmEntry(e, seeAll)),
       pagination: {
         page,
         limit,
@@ -168,7 +169,7 @@ crmRouter.post(
       },
     });
 
-    const isAdmin = req.user!.role === "ADMIN";
+    const isAdmin = req.user!.role === "ADMIN" || req.user!.role === "MANAGER";
     res.status(201).json({
       entry: formatCrmEntry(entry, isAdmin),
     });
@@ -213,11 +214,130 @@ crmRouter.patch(
  * Performance analytics of each agent, breakdown of submissions (pending, approved, rejected),
  * daily trend, and campaign distribution.
  */
+function csvCell(value: string) {
+  const text = String(value ?? "");
+  if (/[",\n]/.test(text)) return `"${text.replace(/"/g, '""')}"`;
+  return text;
+}
+
+function rangeStart(range: string, tzOffsetMin: number) {
+  const now = new Date();
+  const local = new Date(now.getTime() - tzOffsetMin * 60 * 1000);
+  const dayStart = new Date(Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate()));
+  if (range === "month") {
+    dayStart.setUTCDate(1);
+  } else if (range === "week") {
+    const weekday = local.getUTCDay();
+    const back = weekday === 0 ? 6 : weekday - 1;
+    dayStart.setUTCDate(dayStart.getUTCDate() - back);
+  }
+  return new Date(dayStart.getTime() + tzOffsetMin * 60 * 1000);
+}
+
+crmRouter.get(
+  "/sales-stats",
+  requireSalesAccess,
+  asyncHandler(async (_req, res) => {
+    const entries = await prisma.crmEntry.findMany({
+      where: { pingId: null },
+      select: {
+        fronterName: true,
+        status: true,
+        agentId: true,
+        agent: { select: { name: true, email: true } },
+      },
+    });
+
+    const agents = new Map<string, { name: string; pending: number; approved: number; rejected: number; total: number }>();
+    const closers = new Map<string, { name: string; email: string; pending: number; approved: number; rejected: number; total: number }>();
+
+    for (const entry of entries) {
+      const agentName = entry.fronterName.trim() || "Unknown agent";
+      const agentKey = agentName.toLowerCase();
+      const agent = agents.get(agentKey) ?? { name: agentName, pending: 0, approved: 0, rejected: 0, total: 0 };
+      const closer = closers.get(entry.agentId) ?? {
+        name: entry.agent?.name ?? "Closer",
+        email: entry.agent?.email ?? "",
+        pending: 0,
+        approved: 0,
+        rejected: 0,
+        total: 0,
+      };
+      if (entry.status === "PENDING") {
+        agent.pending += 1;
+        closer.pending += 1;
+      } else if (entry.status === "APPROVED") {
+        agent.approved += 1;
+        closer.approved += 1;
+      } else if (entry.status === "REJECTED") {
+        agent.rejected += 1;
+        closer.rejected += 1;
+      }
+      agent.total += 1;
+      closer.total += 1;
+      agents.set(agentKey, agent);
+      closers.set(entry.agentId, closer);
+    }
+
+    const byTotal = <T extends { total: number }>(rows: T[]) => rows.sort((a, b) => b.total - a.total);
+    res.json({
+      agents: byTotal([...agents.values()]),
+      closers: byTotal([...closers.values()]),
+    });
+  })
+);
+
+crmRouter.get(
+  "/export",
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const range = req.query.range === "week" || req.query.range === "month" ? req.query.range : "day";
+    const tzRaw = Number(req.query.tzOffset);
+    const tzOffsetMin = Number.isFinite(tzRaw) ? tzRaw : 0;
+    const from = rangeStart(range, tzOffsetMin);
+    const entries = await prisma.crmEntry.findMany({
+      where: { pingId: null, createdAt: { gte: from } },
+      orderBy: { createdAt: "desc" },
+      include: {
+        campaign: { select: { name: true } },
+        agent: { select: { name: true, email: true } },
+      },
+    });
+
+    const lines = [
+      ["Date", "Status", "Agent Name", "Closer", "Closer Email", "Customer", "Phone", "ZIP", "Campaign", "Comment"].join(","),
+    ];
+    for (const entry of entries) {
+      lines.push(
+        [
+          entry.createdAt.toISOString(),
+          entry.status,
+          csvCell(entry.fronterName),
+          csvCell(entry.agent?.name ?? ""),
+          csvCell(entry.agent?.email ?? ""),
+          csvCell(entry.customerName),
+          csvCell(entry.customerNumber),
+          csvCell(entry.customerZip),
+          csvCell(entry.campaign?.name ?? ""),
+          csvCell(entry.comment),
+        ].join(",")
+      );
+    }
+
+    res.json({
+      filename: `sales-${range}.csv`,
+      count: entries.length,
+      csv: lines.join("\n"),
+    });
+  })
+);
+
 crmRouter.get(
   "/analytics",
+  requireSalesAccess,
   asyncHandler(async (_req, res) => {
     const agents = await prisma.user.findMany({
-      where: { role: "AGENT" },
+      where: { role: { in: ["CLOSER", "AGENT"] } },
       select: { id: true, name: true, email: true },
       orderBy: { name: "asc" },
     });

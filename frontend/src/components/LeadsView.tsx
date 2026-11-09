@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { apiRequest } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
 import {
   Search,
   ChevronRight,
@@ -22,6 +23,7 @@ export function LeadsView({
   onNewLeadClick,
   title = "My Leads",
 }: LeadsViewProps) {
+  const { isAdmin } = useAuth();
   const [leads, setLeads] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -116,7 +118,7 @@ export function LeadsView({
                 <th className="py-3.5 px-4">State</th>
                 <th className="py-3.5 px-5">Campaign</th>
                 <th className="py-3.5 px-5">Winning Buyer</th>
-                <th className="py-3.5 px-4">Bid Revenue</th>
+                {isAdmin && <th className="py-3.5 px-4">Bid Revenue</th>}
                 <th className="py-3.5 px-4">Score</th>
                 <th className="py-3.5 px-5">Status</th>
                 <th className="py-3.5 px-5">Created At</th>
@@ -126,14 +128,14 @@ export function LeadsView({
             <tbody className="divide-y divide-slate-100 text-xs">
               {loading && leads.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="py-12 text-center text-slate-400">
+                  <td colSpan={isAdmin ? 10 : 9} className="py-12 text-center text-slate-400">
                     <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-blue-600" />
                     Loading leads...
                   </td>
                 </tr>
               ) : leads.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="py-12 text-center text-slate-400">
+                  <td colSpan={isAdmin ? 10 : 9} className="py-12 text-center text-slate-400">
                     <p className="text-sm font-semibold text-slate-600">No leads submitted yet</p>
                     <p className="text-xs text-slate-400 mt-1">Submit a caller from &quot;Submit Lead&quot; to test real buyer pings.</p>
                   </td>
@@ -158,9 +160,11 @@ export function LeadsView({
                       </td>
                       <td className="py-3.5 px-5 font-semibold text-slate-800">{lead.campaign || "—"}</td>
                       <td className="py-3.5 px-5 text-slate-500 font-medium">{lead.buyer || "—"}</td>
-                      <td className="py-3.5 px-4 font-mono font-bold text-emerald-600">
-                        ${lead.revenue?.toFixed(2) || "0.00"}
-                      </td>
+                      {isAdmin && (
+                        <td className="py-3.5 px-4 font-mono font-bold text-emerald-600">
+                          ${lead.revenue?.toFixed(2) || "0.00"}
+                        </td>
+                      )}
                       <td className="py-3.5 px-4 font-mono text-slate-600">{lead.score ?? "—"}</td>
                       <td className="py-3.5 px-5">
                         <span

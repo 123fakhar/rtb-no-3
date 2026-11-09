@@ -22,7 +22,8 @@ export function CrmListView({
   onNewSubmissionClick,
   title = "CRM Submissions",
 }: CrmListViewProps) {
-  const { isAdmin } = useAuth();
+  const { user, isAdmin } = useAuth();
+  const seesPhone = user?.role === "ADMIN" || user?.role === "MANAGER";
   const [entries, setEntries] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -83,8 +84,10 @@ export function CrmListView({
           </h1>
           <p className="text-xs text-slate-500 mt-1">
             {isAdmin
-              ? "All submissions with full phone numbers. Review, approve, or reject agent leads."
-              : "Your customer submissions. First 3 digits are masked for compliance."}
+              ? "All submissions with full phone numbers. Only an admin can accept or reject a sale."
+              : seesPhone
+              ? "Every closer's sales. You can see the numbers. Only an admin can accept or reject a sale."
+              : "Your customer submissions. First 3 digits are masked. Revenue is hidden."}
           </p>
         </div>
 
@@ -93,7 +96,7 @@ export function CrmListView({
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
-              placeholder="Search customer, fronter..."
+              placeholder="Search customer, agent..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="bg-white border border-slate-200/90 text-xs rounded-xl pl-9 pr-3 py-2.5 w-52 focus:outline-none focus:ring-2 focus:ring-blue-600 shadow-2xs font-medium"
@@ -137,16 +140,16 @@ export function CrmListView({
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50/80 border-b border-slate-100 text-[11px] font-extrabold text-slate-500 uppercase tracking-wider whitespace-nowrap">
-                <th className="py-3.5 px-4">Fronter&apos;s Name</th>
+                <th className="py-3.5 px-4">Agent Name</th>
                 <th className="py-3.5 px-4">Customer Name</th>
                 <th className="py-3.5 px-4">
                   Customer Phone
-                  {!isAdmin && <span className="ml-1 text-[10px] text-blue-600 font-bold">(Masked)</span>}
+                  {!seesPhone && <span className="ml-1 text-[10px] text-blue-600 font-bold">(Masked)</span>}
                 </th>
                 <th className="py-3.5 px-3">ZIP</th>
                 <th className="py-3.5 px-4">DID</th>
                 <th className="py-3.5 px-4">Campaign &amp; Vertical</th>
-                <th className="py-3.5 px-4">Agent (Submitted By)</th>
+                <th className="py-3.5 px-4">Closer</th>
                 <th className="py-3.5 px-5">Status</th>
                 <th className="py-3.5 px-4">Comment</th>
                 <th className="py-3.5 px-4 text-right">{isAdmin ? "Admin QA Actions" : "Submitted"}</th>
@@ -185,7 +188,7 @@ export function CrmListView({
                       <td className="py-3.5 px-4 font-mono font-bold whitespace-nowrap">
                         <span
                           className={
-                            isAdmin
+                            seesPhone
                               ? "text-blue-600"
                               : "text-slate-700 bg-slate-100 px-2 py-0.5 rounded-lg border border-slate-200"
                           }

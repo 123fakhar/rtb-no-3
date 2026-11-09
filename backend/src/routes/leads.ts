@@ -17,7 +17,11 @@ function maskPhone(phone: string) {
 }
 
 function visiblePhone(role: string | undefined, phone: string) {
-  return role === "AGENT" ? maskPhone(phone) : phone;
+  return role === "CLOSER" || role === "AGENT" ? maskPhone(phone) : phone;
+}
+
+function showRevenue(role: string | undefined) {
+  return role === "ADMIN";
 }
 
 const createLeadSchema = z.object({
@@ -51,7 +55,7 @@ leadsRouter.get(
 
     // Filter by agent if requested or for non-admin if desired, but agents can view their own leads
     const agentFilter =
-      req.user!.role === "AGENT" && req.query.all !== "true"
+      (req.user!.role === "CLOSER" || req.user!.role === "AGENT") && req.query.all !== "true"
         ? req.user!.id
         : typeof req.query.agentId === "string"
         ? req.query.agentId
@@ -108,10 +112,10 @@ leadsRouter.get(
       campaignId: lead.campaignId,
       buyer: lead.buyerId ? buyerMap.get(lead.buyerId) ?? "Buyer" : "—",
       buyerId: lead.buyerId,
-      revenue: Number(lead.revenue),
+      revenue: showRevenue(req.user?.role) ? Number(lead.revenue) : null,
       score: lead.score,
       status: lead.status,
-      agentName: lead.agent?.name ?? "Agent",
+      agentName: lead.agent?.name ?? "Closer",
       agentId: lead.agentId,
       createdAt: lead.createdAt.toISOString(),
       pingsCount: lead._count.pings,
@@ -318,7 +322,7 @@ leadsRouter.get(
         campaign: lead.campaign?.name ?? "Auto Insurance",
         campaignId: lead.campaignId,
         status: lead.status,
-        revenue: Number(lead.revenue),
+        revenue: showRevenue(req.user?.role) ? Number(lead.revenue) : null,
         score: lead.score,
       },
       buyers: groupedBuyers,

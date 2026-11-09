@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { asyncHandler } from "../lib/http";
-import { requireAdmin, requireAuth } from "../middleware/auth";
+import { canSeeRevenue, requireAdmin, requireAuth } from "../middleware/auth";
 import { agentPerformance, dashboard, performanceForUser } from "../services/analytics";
 
 export const analyticsRouter = Router();
@@ -19,6 +19,7 @@ function parseDate(value: unknown, fallback: Date): Date {
 
 analyticsRouter.get(
   "/dashboard",
+  requireAdmin,
   asyncHandler(async (req, res) => {
     const to = parseDate(req.query.to, new Date());
     let from = parseDate(req.query.from, new Date(to.getTime() - 29 * 24 * 60 * 60 * 1000));
@@ -50,6 +51,11 @@ analyticsRouter.get(
     const performance = await performanceForUser(req.user!.id);
     if (!performance) {
       res.status(404).json({ error: "User not found" });
+      return;
+    }
+    if (!canSeeRevenue(req.user?.role)) {
+      const { revenue: _revenue, ...safe } = performance;
+      res.json({ performance: safe });
       return;
     }
     res.json({ performance });
