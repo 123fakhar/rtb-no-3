@@ -4,7 +4,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { asyncHandler, HttpError } from "../lib/http";
 import { requireAdmin, requireAuth, requireSalesAccess } from "../middleware/auth";
-import { syncLeadSale } from "../services/sale";
+import { phoneKey, syncLeadSale } from "../services/sale";
 
 export const crmRouter = Router();
 
@@ -12,6 +12,7 @@ crmRouter.use(requireAuth);
 
 const createCrmSchema = z.object({
   fronterName: z.string().trim().min(1, "Agent name is required").max(120),
+  closerName: z.string().trim().min(1, "Closer name is required").max(120),
   customerName: z.string().trim().min(1, "Customer Name is required").max(120),
   customerNumber: z
     .string()
@@ -22,6 +23,7 @@ const createCrmSchema = z.object({
   customerEmail: z.string().trim().email().or(z.literal("")).default(""),
   did: z.string().trim().max(30).default(""),
   campaignId: z.string().min(1, "Campaign is required").nullable().optional(),
+  buyerId: z.string().min(1, "Buyer is required"),
   comment: z.string().trim().max(2000).default(""),
 });
 
@@ -52,6 +54,7 @@ function formatCrmEntry(entry: any, isAdmin: boolean) {
   return {
     id: entry.id,
     fronterName: entry.fronterName,
+    closerName: entry.closerName?.trim() || entry.agent?.name || "Closer",
     customerName: entry.customerName,
     // Closers see a masked phone. Managers and admins see the full number.
     customerNumber: isAdmin ? entry.customerNumber : maskCustomerNumber(entry.customerNumber),
@@ -62,10 +65,12 @@ function formatCrmEntry(entry: any, isAdmin: boolean) {
     campaignId: entry.campaignId,
     campaignName: entry.campaign?.name ?? "—",
     vertical: entry.campaign?.vertical ?? "—",
+    buyerId: entry.buyerId ?? null,
+    buyerName: entry.buyer?.name ?? "—",
     comment: entry.comment,
     status: entry.status, // PENDING (yellow), APPROVED (green), REJECTED (red)
     agentId: entry.agentId,
-    agentName: entry.agent?.name ?? "Closer",
+    agentName: entry.closerName?.trim() || entry.agent?.name || "Closer",
     agentEmail: entry.agent?.email ?? "",
     reviewedById: entry.reviewedById,
     reviewedAt: entry.reviewedAt ? entry.reviewedAt.toISOString() : null,
@@ -124,6 +129,7 @@ crmRouter.get(
         take: limit,
         include: {
           campaign: { select: { id: true, name: true, vertical: true } },
+          buyer: { select: { id: true, name: true } },
           agent: { select: { id: true, name: true, email: true } },
         },
       }),
@@ -149,22 +155,40 @@ crmRouter.post(
   "/",
   asyncHandler(async (req, res) => {
     const data = createCrmSchema.parse(req.body);
+    const buyer = await prisma.buyer.findUnique({ where: { id: data.buyerId }, select: { id: true } });
+    if (!buyer) throw new HttpError(400, "Choose a buyer for this sale");
+
+    const key = phoneKey(data.customerNumber);
+    const storedNumber = key.length >= 9 ? key : data.customerNumber;
+    const leadMatches = key.length >= 9
+      ? await prisma.lead.findMany({
+          where: { phone: { contains: key.length > 10 ? key.slice(-10) : key } },
+          orderBy: { createdAt: "desc" },
+          take: 20,
+          select: { id: true, phone: true },
+        })
+      : [];
+    const matchedLead = leadMatches.find((lead) => phoneKey(lead.phone) === key);
 
     const entry = await prisma.crmEntry.create({
       data: {
         fronterName: data.fronterName,
+        closerName: data.closerName,
         customerName: data.customerName,
-        customerNumber: data.customerNumber,
+        customerNumber: storedNumber,
         customerZip: data.customerZip,
         customerEmail: data.customerEmail,
         did: data.did,
         campaignId: data.campaignId ?? null,
+        buyerId: buyer.id,
+        leadId: matchedLead?.id ?? null,
         comment: data.comment,
-        status: "PENDING", // Initial pending status (yellow)
+        status: "PENDING",
         agentId: req.user!.id,
       },
       include: {
         campaign: { select: { id: true, name: true, vertical: true } },
+        buyer: { select: { id: true, name: true } },
         agent: { select: { id: true, name: true, email: true } },
       },
     });
@@ -173,6 +197,52 @@ crmRouter.post(
     res.status(201).json({
       entry: formatCrmEntry(entry, isAdmin),
     });
+  })
+);
+
+/**
+ * PATCH /api/crm/:id/buyer
+ * Attach the buyer to a sale that was reviewed before a buyer was recorded.
+ * An accepted or rejected row starts blocking that buyer as soon as this is saved.
+ */
+crmRouter.patch(
+  "/:id/buyer",
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const { buyerId } = z.object({ buyerId: z.string().min(1, "Buyer is required") }).parse(req.body);
+    const existing = await prisma.crmEntry.findUnique({ where: { id: req.params.id } });
+    if (!existing) throw new HttpError(404, "CRM Entry not found");
+
+    const buyer = await prisma.buyer.findUnique({ where: { id: buyerId }, select: { id: true } });
+    if (!buyer) throw new HttpError(400, "Choose a buyer for this sale");
+
+    let leadId = existing.leadId;
+    if (!leadId) {
+      const key = phoneKey(existing.customerNumber);
+      if (key.length >= 9) {
+        const matches = await prisma.lead.findMany({
+          where: { phone: { contains: key.length > 10 ? key.slice(-10) : key } },
+          orderBy: { createdAt: "desc" },
+          take: 20,
+          select: { id: true, phone: true },
+        });
+        leadId = matches.find((lead) => phoneKey(lead.phone) === key)?.id ?? null;
+      }
+    }
+
+    const updated = await prisma.crmEntry.update({
+      where: { id: existing.id },
+      data: { buyerId: buyer.id, leadId },
+      include: {
+        campaign: { select: { id: true, name: true, vertical: true } },
+        buyer: { select: { id: true, name: true } },
+        agent: { select: { id: true, name: true, email: true } },
+      },
+    });
+    if (leadId && (existing.status === "APPROVED" || existing.status === "REJECTED")) {
+      await syncLeadSale(leadId);
+    }
+    res.json({ entry: formatCrmEntry(updated, true) });
   })
 );
 
@@ -188,6 +258,9 @@ crmRouter.patch(
 
     const existing = await prisma.crmEntry.findUnique({ where: { id: req.params.id } });
     if (!existing) throw new HttpError(404, "CRM Entry not found");
+    if (!existing.buyerId) {
+      throw new HttpError(400, "Choose the buyer before accepting or rejecting this sale");
+    }
 
     const updated = await prisma.crmEntry.update({
       where: { id: req.params.id },
@@ -199,6 +272,7 @@ crmRouter.patch(
       },
       include: {
         campaign: { select: { id: true, name: true, vertical: true } },
+        buyer: { select: { id: true, name: true } },
         agent: { select: { id: true, name: true, email: true } },
       },
     });
@@ -240,8 +314,10 @@ crmRouter.get(
   asyncHandler(async (_req, res) => {
     const entries = await prisma.crmEntry.findMany({
       where: { pingId: null },
+      orderBy: { createdAt: "asc" },
       select: {
         fronterName: true,
+        closerName: true,
         status: true,
         agentId: true,
         agent: { select: { name: true, email: true } },
@@ -263,6 +339,7 @@ crmRouter.get(
         rejected: 0,
         total: 0,
       };
+      if (entry.closerName?.trim()) closer.name = entry.closerName.trim();
       if (entry.status === "PENDING") {
         agent.pending += 1;
         closer.pending += 1;
@@ -313,7 +390,7 @@ crmRouter.get(
           entry.createdAt.toISOString(),
           entry.status,
           csvCell(entry.fronterName),
-          csvCell(entry.agent?.name ?? ""),
+          csvCell(entry.closerName?.trim() || entry.agent?.name || ""),
           csvCell(entry.agent?.email ?? ""),
           csvCell(entry.customerName),
           csvCell(entry.customerNumber),

@@ -25,6 +25,7 @@ export function CrmListView({
   const { user, isAdmin } = useAuth();
   const seesPhone = user?.role === "ADMIN" || user?.role === "MANAGER";
   const [entries, setEntries] = useState<any[]>([]);
+  const [buyers, setBuyers] = useState<{ id: string; name: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
@@ -51,6 +52,29 @@ export function CrmListView({
   useEffect(() => {
     loadEntries();
   }, [search, statusFilter]);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    apiRequest<{ buyers: { id: string; name: string }[] }>("/api/buyers")
+      .then((res) => setBuyers(res.buyers.map((buyer) => ({ id: buyer.id, name: buyer.name }))))
+      .catch(console.error);
+  }, [isAdmin]);
+
+  const handleAssignBuyer = async (id: string, buyerId: string) => {
+    if (!buyerId) return;
+    setActionLoadingId(id);
+    try {
+      await apiRequest(`/api/crm/${id}/buyer`, {
+        method: "PATCH",
+        body: JSON.stringify({ buyerId }),
+      });
+      await loadEntries();
+    } catch (err: any) {
+      alert(err.message || "Failed to save the buyer");
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
 
   const handleReview = async (id: string, status: "APPROVED" | "REJECTED") => {
     setActionLoadingId(id);
@@ -149,6 +173,7 @@ export function CrmListView({
                 <th className="py-3.5 px-3">ZIP</th>
                 <th className="py-3.5 px-4">DID</th>
                 <th className="py-3.5 px-4">Campaign &amp; Vertical</th>
+                <th className="py-3.5 px-4">Buyer</th>
                 <th className="py-3.5 px-4">Closer</th>
                 <th className="py-3.5 px-5">Status</th>
                 <th className="py-3.5 px-4">Comment</th>
@@ -158,14 +183,14 @@ export function CrmListView({
             <tbody className="divide-y divide-slate-100 text-xs">
               {loading ? (
                 <tr>
-                  <td colSpan={10} className="py-12 text-center text-slate-400">
+                  <td colSpan={11} className="py-12 text-center text-slate-400">
                     <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-blue-600" />
                     Loading CRM leads...
                   </td>
                 </tr>
               ) : entries.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="py-12 text-center text-slate-400">
+                  <td colSpan={11} className="py-12 text-center text-slate-400">
                     <p className="text-sm font-semibold text-slate-600">No CRM records found</p>
                     <p className="text-xs text-slate-400 mt-1">Submit a customer record to begin QA review.</p>
                   </td>
@@ -207,6 +232,27 @@ export function CrmListView({
                         <span className="text-[10px] text-slate-400">{entry.vertical}</span>
                       </td>
                       <td className="py-3.5 px-4 whitespace-nowrap">
+                        {entry.buyerId ? (
+                          <span className="font-semibold text-slate-800">{entry.buyerName}</span>
+                        ) : isAdmin ? (
+                          <select
+                            defaultValue=""
+                            disabled={isActionLoading}
+                            onChange={(e) => handleAssignBuyer(entry.id, e.target.value)}
+                            className="bg-white border border-amber-300 text-[11px] font-semibold rounded-lg px-2 py-1.5 text-slate-700"
+                          >
+                            <option value="">Choose buyer</option>
+                            {buyers.map((buyer) => (
+                              <option key={buyer.id} value={buyer.id}>
+                                {buyer.name}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <span className="text-slate-400">—</span>
+                        )}
+                      </td>
+                      <td className="py-3.5 px-4 whitespace-nowrap">
                         <div className="flex items-center gap-1.5">
                           <div className="w-5 h-5 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-[10px]">
                             {entry.agentName.slice(0, 1)}
@@ -234,13 +280,15 @@ export function CrmListView({
                           </span>
                         )}
                       </td>
-                      <td className="py-3.5 px-4 max-w-xs truncate text-slate-500 text-xs" title={entry.comment}>
-                        {entry.comment || "—"}
+                      <td className="py-3.5 px-4 min-w-[16rem] max-w-md whitespace-normal break-words text-slate-700 text-xs">
+                        {entry.comment?.trim() ? entry.comment : "—"}
                       </td>
                       <td className="py-3.5 px-4 text-right whitespace-nowrap">
                         {isAdmin ? (
                           <div className="flex items-center justify-end gap-1.5">
-                            {isPending ? (
+                            {!entry.buyerId ? (
+                              <span className="text-[11px] font-semibold text-amber-700">Choose the buyer first</span>
+                            ) : isPending ? (
                               <>
                                 <button
                                   onClick={() => handleReview(entry.id, "APPROVED")}

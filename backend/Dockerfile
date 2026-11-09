@@ -43,4 +43,4 @@ EXPOSE 4000
 HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=3 \
   CMD curl -f http://localhost:4000/api/health || exit 1
 
-CMD ["sh", "-c", "npx prisma migrate deploy && npx tsx prisma/seed.ts || true && node dist/server.js"]
+CMD ["node", "dist/server.js"]

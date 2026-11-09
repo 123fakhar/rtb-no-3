@@ -86,7 +86,7 @@ export function SalesStatsView() {
       </div>
       {error && <div className="p-3 rounded-2xl bg-rose-50 text-rose-700 text-xs">{error}</div>}
       <StatsTable title="Agents" hint="The agent name typed on the CRM form." rows={agents} />
-      <StatsTable title="Closers" hint="The closer account that submitted the CRM form." rows={closers} showEmail />
+      <StatsTable title="Closers" hint="The name the closer typed on the CRM form." rows={closers} showEmail />
     </div>
   );
 }

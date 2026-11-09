@@ -183,6 +183,7 @@ model Ping {
 model CrmEntry {
   id             String    @id @default(cuid())
   fronterName    String
+  closerName     String    @default("")
   customerName   String
   customerNumber String
   customerZip    String

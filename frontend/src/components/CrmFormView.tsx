@@ -12,18 +12,26 @@ interface CrmFormViewProps {
 export function CrmFormView({ onSuccess }: CrmFormViewProps) {
   const { user } = useAuth();
   const [fronterName, setFronterName] = useState("");
+  const [closerName, setCloserName] = useState(user?.name || "");
+  const [closerNameEdited, setCloserNameEdited] = useState(false);
   const [customerName, setCustomerName] = useState("");
   const [customerNumber, setCustomerNumber] = useState("");
   const [customerZip, setCustomerZip] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
   const [did, setDid] = useState("");
   const [campaignId, setCampaignId] = useState("");
+  const [buyerId, setBuyerId] = useState("");
   const [comment, setComment] = useState("");
 
   const [campaigns, setCampaigns] = useState<any[]>([]);
+  const [buyers, setBuyers] = useState<{ id: string; name: string }[]>([]);
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!closerNameEdited && user?.name) setCloserName(user.name);
+  }, [user?.name, closerNameEdited]);
 
   useEffect(() => {
     apiRequest<{ campaigns: any[] }>("/api/campaigns")
@@ -34,6 +42,9 @@ export function CrmFormView({ onSuccess }: CrmFormViewProps) {
         }
       })
       .catch(console.error);
+    apiRequest<{ buyers: { id: string; name: string }[] }>("/api/buyers")
+      .then((res) => setBuyers(res.buyers.map((buyer) => ({ id: buyer.id, name: buyer.name }))))
+      .catch(console.error);
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -42,6 +53,10 @@ export function CrmFormView({ onSuccess }: CrmFormViewProps) {
 
     if (!fronterName.trim()) {
       setError("Agent name is required");
+      return;
+    }
+    if (!closerName.trim()) {
+      setError("Closer name is required");
       return;
     }
     if (!customerName.trim()) {
@@ -56,6 +71,10 @@ export function CrmFormView({ onSuccess }: CrmFormViewProps) {
       setError("Customer ZIP code is required");
       return;
     }
+    if (!buyerId) {
+      setError("Choose the buyer this sale was made to");
+      return;
+    }
 
     setLoading(true);
     try {
@@ -63,12 +82,14 @@ export function CrmFormView({ onSuccess }: CrmFormViewProps) {
         method: "POST",
         body: JSON.stringify({
           fronterName: fronterName.trim(),
+          closerName: closerName.trim(),
           customerName: customerName.trim(),
           customerNumber: customerNumber.trim(),
           customerZip: customerZip.trim(),
           customerEmail: customerEmail.trim(),
           did: did.trim(),
           campaignId: campaignId || null,
+          buyerId,
           comment: comment.trim(),
         }),
       });
@@ -115,7 +136,7 @@ export function CrmFormView({ onSuccess }: CrmFormViewProps) {
           CRM Lead Submission
         </h1>
         <p className="text-xs text-slate-500 mt-1">
-          The agent name is the person who opened the lead. You are recorded separately as the closer.
+          The agent name is the person who opened the lead. Type your own name as the closer. That name is what managers and admins see on sales stats. Choose the buyer this sale belongs to. After an admin accepts or rejects it, this number cannot be sent to that buyer again.
         </p>
       </div>
 
@@ -144,13 +165,18 @@ export function CrmFormView({ onSuccess }: CrmFormViewProps) {
 
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">
-                Closer
+                Closer Name <span className="text-rose-500">*</span>
               </label>
               <input
                 type="text"
-                value={user?.name || ""}
-                readOnly
-                className="w-full px-4 py-2.5 bg-slate-100 border border-slate-200/90 rounded-2xl text-xs font-medium text-slate-600"
+                placeholder="Your name"
+                value={closerName}
+                onChange={(e) => {
+                  setCloserNameEdited(true);
+                  setCloserName(e.target.value);
+                }}
+                required
+                className="w-full px-4 py-2.5 bg-slate-50/60 border border-slate-200/90 rounded-2xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-600 focus:bg-white transition-all placeholder:text-slate-400"
               />
             </div>
 
@@ -228,6 +254,25 @@ export function CrmFormView({ onSuccess }: CrmFormViewProps) {
                 className="w-full px-4 py-2.5 bg-slate-50/60 border border-slate-200/90 rounded-2xl text-xs font-mono font-medium focus:outline-none focus:ring-2 focus:ring-blue-600 focus:bg-white transition-all placeholder:text-slate-400"
               />
             </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">
+              Buyer <span className="text-rose-500">*</span>
+            </label>
+            <select
+              value={buyerId}
+              onChange={(e) => setBuyerId(e.target.value)}
+              required
+              className="w-full px-4 py-2.5 bg-slate-50/60 border border-slate-200/90 rounded-2xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-600 focus:bg-white transition-all text-slate-800"
+            >
+              <option value="">Select the buyer</option>
+              {buyers.map((buyer) => (
+                <option key={buyer.id} value={buyer.id}>
+                  {buyer.name}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div>
