@@ -1,5 +1,5 @@
 import type { ProviderAdapter } from "./types";
-import { createGenericAdapter, defaultInterpret } from "./generic";
+import { createGenericAdapter, defaultInterpret, interpretCallisto } from "./generic";
 
 /**
  * One adapter per supported buyer platform. Adding a provider is a single
@@ -57,6 +57,15 @@ export const providers: Record<string, ProviderAdapter> = {
       { key: "apiKey", label: "API Key", secret: true },
       { key: "sourceId", label: "Source ID" },
     ],
+  }),
+  callisto: createGenericAdapter({
+    key: "callisto",
+    label: "Callisto",
+    fields: [
+      { key: "rtbId", label: "RTB ID" },
+      { key: "pingEndpoint", label: "Ping Endpoint" },
+    ],
+    interpret: interpretCallisto,
   }),
   generic: createGenericAdapter({
     key: "generic",

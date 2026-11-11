@@ -71,6 +71,21 @@ export function createGenericAdapter(opts: {
         if (campaignKey && !has("campaignId")) pairs.push({ key: "campaignId", value: campaignKey });
       }
 
+      if (ctx.provider === "callisto") {
+        const caller = e164Phone(ctx.lead.phone);
+        const state = ctx.lead.state && ctx.lead.state !== "undefined" ? ctx.lead.state.trim().toUpperCase() : "";
+        const postal = postalCode(ctx.lead.zip);
+        const setPair = (key: string, value: string) => {
+          if (!value) return;
+          const index = pairs.findIndex((pair) => pair.key.toLowerCase() === key);
+          if (index >= 0) pairs[index] = { key, value };
+          else pairs.push({ key, value });
+        };
+        setPair("caller_id", caller);
+        setPair("state", state);
+        setPair("zip", postal);
+      }
+
       if (ctx.provider === "ringba") {
         const caller = e164Phone(ctx.lead.phone);
         const cidIndex = pairs.findIndex((pair) => pair.key.toLowerCase() === "cid");
@@ -128,6 +143,26 @@ function dig(obj: unknown, path: string[]): unknown {
   }
   return cur;
 }
+
+/** Callisto returns a bid on `pricing` and the transfer number on `agents[0].phone`. */
+export const interpretCallisto: Interpret = (body, httpStatus) => {
+  const b = (body ?? {}) as Record<string, unknown>;
+  const agents = Array.isArray(b.agents) ? (b.agents as Record<string, unknown>[]) : [];
+  const available = typeof b.available_agents === "number" ? b.available_agents : agents.length;
+  const pricing = b.pricing && typeof b.pricing === "object" ? (b.pricing as Record<string, unknown>) : {};
+  const dollars = typeof pricing.price_dollars === "number" ? pricing.price_dollars : Number(pricing.price_dollars);
+  const cents = typeof pricing.price_cents === "number" ? pricing.price_cents : Number(pricing.price_cents);
+  const bid = Number.isFinite(dollars) ? dollars : Number.isFinite(cents) ? cents / 100 : null;
+  const phone = typeof agents[0]?.phone === "string" ? agents[0].phone : null;
+  const accepted = httpStatus < 400 && available > 0 && (bid !== null || Boolean(phone));
+  const reason = typeof b.reason === "string" && b.reason ? b.reason : "Rejected";
+  return {
+    accepted,
+    bid,
+    trackingNumber: phone,
+    rejectReason: accepted ? null : reason,
+  };
+};
 
 /** Best-effort interpretation that covers the common RTB response shapes. */
 export const defaultInterpret: Interpret = (body, httpStatus) => {

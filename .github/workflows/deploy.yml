@@ -93,6 +93,20 @@ jobs:
             # Up containers with orphan cleanup; existing DB persistent volume is preserved
             docker compose up -d --remove-orphans
 
+            echo "=== 4b. Syncing reference buyer catalog into the database ==="
+            SYNC_OK=0
+            for i in 1 2 3 4 5 6 7 8; do
+              if docker compose exec -T backend node prisma/sync-catalog.js; then
+                SYNC_OK=1
+                break
+              fi
+              echo "Catalog sync not ready (attempt $i/8), retrying..."
+              sleep 5
+            done
+            if [ "$SYNC_OK" != "1" ]; then
+              echo "⚠️ Warning: reference catalog sync did not succeed."
+            fi
+
             echo "=== 5. Running Health Check ==="
             ATTEMPTS=0
             MAX_ATTEMPTS=12

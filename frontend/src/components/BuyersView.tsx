@@ -2,11 +2,12 @@
 
 import React, { useEffect, useState } from "react";
 import { apiRequest } from "@/lib/api";
+import { putCache, takeCache } from "@/lib/tabCache";
 import { Plus, Loader2, X, Trash2, Edit3, ArrowUpDown, Building2 } from "lucide-react";
 
 export function BuyersView() {
-  const [buyers, setBuyers] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [buyers, setBuyers] = useState<any[]>(() => takeCache<any[]>("buyers") ?? []);
+  const [loading, setLoading] = useState(() => takeCache("buyers") == null);
   const [showModal, setShowModal] = useState(false);
   const [editingBuyer, setEditingBuyer] = useState<any | null>(null);
 
@@ -21,10 +22,13 @@ export function BuyersView() {
   const [error, setError] = useState<string | null>(null);
 
   const loadBuyers = async () => {
-    setLoading(true);
+    const cached = takeCache<any[]>("buyers");
+    if (cached) setBuyers(cached);
+    else setLoading(true);
     try {
       const res = await apiRequest<{ buyers: any[] }>("/api/buyers");
       setBuyers(res.buyers);
+      putCache("buyers", res.buyers);
     } catch (err) {
       console.error("Failed to load buyers:", err);
     } finally {
@@ -160,7 +164,7 @@ export function BuyersView() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-xs">
-              {loading ? (
+              {loading && buyers.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="py-12 text-center text-slate-400">
                     <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-blue-600" />
@@ -314,6 +318,7 @@ export function BuyersView() {
                   <option value="ringfuel">Ringfuel</option>
                   <option value="intelhouse">IntelHouse</option>
                   <option value="callgrid">Call Grid</option>
+                  <option value="callisto">Callisto</option>
                   <option value="generic">Generic RTB</option>
                 </select>
               </div>

@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { apiRequest } from "@/lib/api";
+import { putCache, takeCache } from "@/lib/tabCache";
 import { useAuth } from "@/context/AuthContext";
 import {
   Search,
@@ -18,20 +19,50 @@ interface LeadsViewProps {
   title?: string;
 }
 
+type LeadPage = { leads: any[]; totalPages: number };
+
+function readLeadPage(key: string): LeadPage | null {
+  const cached = takeCache<LeadPage | any[]>(key);
+  if (!cached) return null;
+  if (Array.isArray(cached)) return { leads: cached, totalPages: 1 };
+  if (Array.isArray(cached.leads)) return { leads: cached.leads, totalPages: cached.totalPages || 1 };
+  return null;
+}
+
+function money(value: unknown) {
+  const amount = typeof value === "number" ? value : Number(value ?? 0);
+  return Number.isFinite(amount) ? amount.toFixed(2) : "0.00";
+}
+
+function text(value: unknown) {
+  if (typeof value === "string") return value || "—";
+  if (value && typeof value === "object" && "name" in value) {
+    const name = (value as { name?: unknown }).name;
+    if (typeof name === "string" && name) return name;
+  }
+  return "—";
+}
+
 export function LeadsView({
   onSelectLead,
   onNewLeadClick,
   title = "My Leads",
 }: LeadsViewProps) {
-  const { isAdmin } = useAuth();
-  const [leads, setLeads] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { user, isAdmin } = useAuth();
+  const initialKey = `leads:${user?.id ?? ""}:1:`;
+  const [leads, setLeads] = useState<any[]>(() => readLeadPage(initialKey)?.leads ?? []);
+  const [loading, setLoading] = useState(() => readLeadPage(initialKey) == null);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
+  const [totalPages, setTotalPages] = useState(() => readLeadPage(initialKey)?.totalPages ?? 1);
+  const leadKey = `leads:${user?.id ?? ""}:${page}:${search}`;
 
   const loadLeads = async () => {
-    setLoading(true);
+    const cached = readLeadPage(leadKey);
+    if (cached) {
+      setLeads(cached.leads);
+      setTotalPages(cached.totalPages || 1);
+    } else setLoading(true);
     try {
       const q = new URLSearchParams({
         page: String(page),
@@ -41,6 +72,7 @@ export function LeadsView({
       const res = await apiRequest<{ leads: any[]; pagination: any }>(`/api/leads?${q.toString()}`);
       setLeads(res.leads);
       setTotalPages(res.pagination.totalPages || 1);
+      putCache(leadKey, { leads: res.leads, totalPages: res.pagination.totalPages || 1 });
     } catch (err) {
       console.error("Failed to load leads:", err);
     } finally {
@@ -141,7 +173,7 @@ export function LeadsView({
                   </td>
                 </tr>
               ) : (
-                leads.map((lead) => {
+                (Array.isArray(leads) ? leads : []).map((lead) => {
                   const isSold = lead.status === "SOLD";
                   return (
                     <tr
@@ -158,11 +190,11 @@ export function LeadsView({
                           {lead.state}
                         </span>
                       </td>
-                      <td className="py-3.5 px-5 font-semibold text-slate-800">{lead.campaign || "—"}</td>
-                      <td className="py-3.5 px-5 text-slate-500 font-medium">{lead.buyer || "—"}</td>
+                      <td className="py-3.5 px-5 font-semibold text-slate-800">{text(lead.campaign)}</td>
+                      <td className="py-3.5 px-5 text-slate-500 font-medium">{text(lead.buyer)}</td>
                       {isAdmin && (
                         <td className="py-3.5 px-4 font-mono font-bold text-emerald-600">
-                          ${lead.revenue?.toFixed(2) || "0.00"}
+                          ${money(lead.revenue)}
                         </td>
                       )}
                       <td className="py-3.5 px-4 font-mono text-slate-600">{lead.score ?? "—"}</td>

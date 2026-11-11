@@ -2,13 +2,14 @@
 
 import React, { useEffect, useState } from "react";
 import { apiRequest } from "@/lib/api";
+import { putCache, takeCache } from "@/lib/tabCache";
 import { Plus, MoreHorizontal, Loader2, X, Trash2, Edit3, ExternalLink, Copy, Check } from "lucide-react";
 
 export function RtbApisView() {
-  const [configs, setConfigs] = useState<any[]>([]);
-  const [buyers, setBuyers] = useState<any[]>([]);
-  const [campaigns, setCampaigns] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [configs, setConfigs] = useState<any[]>(() => takeCache<any[]>("rtb-configs") ?? []);
+  const [buyers, setBuyers] = useState<any[]>(() => takeCache<any[]>("rtb-buyers") ?? []);
+  const [campaigns, setCampaigns] = useState<any[]>(() => takeCache<any[]>("rtb-campaigns") ?? []);
+  const [loading, setLoading] = useState(() => takeCache("rtb-configs") == null);
   const [showModal, setShowModal] = useState(false);
   const [editingConfig, setEditingConfig] = useState<any | null>(null);
 
@@ -46,7 +47,12 @@ export function RtbApisView() {
   const [error, setError] = useState<string | null>(null);
 
   const loadData = async () => {
-    setLoading(true);
+    const cachedConfigs = takeCache<any[]>("rtb-configs");
+    if (cachedConfigs) {
+      setConfigs(cachedConfigs);
+      setBuyers(takeCache<any[]>("rtb-buyers") ?? []);
+      setCampaigns(takeCache<any[]>("rtb-campaigns") ?? []);
+    } else setLoading(true);
     try {
       const [confRes, buyRes, campRes] = await Promise.all([
         apiRequest<{ configs: any[] }>("/api/configs"),
@@ -56,6 +62,9 @@ export function RtbApisView() {
       setConfigs(confRes.configs);
       setBuyers(buyRes.buyers);
       setCampaigns(campRes.campaigns);
+      putCache("rtb-configs", confRes.configs);
+      putCache("rtb-buyers", buyRes.buyers);
+      putCache("rtb-campaigns", campRes.campaigns);
     } catch (err) {
       console.error("Failed to load configs:", err);
     } finally {
@@ -299,7 +308,7 @@ export function RtbApisView() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-xs">
-              {loading ? (
+              {loading && configs.length === 0 ? (
                 <tr>
                   <td colSpan={12} className="py-12 text-center text-slate-400">
                     <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-blue-600" />
@@ -509,6 +518,7 @@ export function RtbApisView() {
                   <option value="intelhouse">IntelHouse</option>
                   <option value="ringfuel">Ringfuel</option>
                   <option value="callgrid">Call Grid</option>
+                  <option value="callisto">Callisto</option>
                   <option value="generic">Generic (manual endpoint + parameters)</option>
                 </select>
                 <p className="text-[10px] text-slate-400 mt-1">
@@ -635,7 +645,7 @@ export function RtbApisView() {
                 </div>
               )}
 
-              {provider === "retreaver" && (
+              {(provider === "retreaver" || provider === "callisto") && (
                 <div className="space-y-3 p-3.5 bg-slate-50 rounded-xl border border-slate-200">
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1">
@@ -643,7 +653,7 @@ export function RtbApisView() {
                     </label>
                     <input
                       type="text"
-                      placeholder="https://rtb.retreaver.com/rtbs.json"
+                      placeholder="https://..."
                       value={baseUrl}
                       onChange={(e) => setBaseUrl(e.target.value)}
                       className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs font-mono"
