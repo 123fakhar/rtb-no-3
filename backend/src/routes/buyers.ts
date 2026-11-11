@@ -25,7 +25,7 @@ buyersRouter.get(
     const buyers = await prisma.buyer.findMany({
       orderBy: [{ priority: "asc" }, { name: "asc" }],
       include: {
-        _count: { select: { configs: true, pings: true } },
+        _count: { select: { configs: true } },
         configs: {
           select: { id: true, name: true, provider: true, status: true, campaign: { select: { name: true } } },
         },

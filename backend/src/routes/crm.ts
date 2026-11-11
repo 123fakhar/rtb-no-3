@@ -5,6 +5,7 @@ import { prisma } from "../lib/prisma";
 import { asyncHandler, HttpError } from "../lib/http";
 import { requireAdmin, requireAuth, requireSalesAccess } from "../middleware/auth";
 import { phoneKey, syncLeadSale } from "../services/sale";
+import { workbookFile } from "../services/excel";
 
 export const crmRouter = Router();
 
@@ -102,6 +103,7 @@ crmRouter.get(
 
     const where: Prisma.CrmEntryWhereInput = {
       pingId: null,
+      kind: "SALE",
       ...(agentFilter ? { agentId: agentFilter } : {}),
       ...(campaignId ? { campaignId } : {}),
       ...(status && ["PENDING", "APPROVED", "REJECTED"].includes(status)
@@ -183,6 +185,7 @@ crmRouter.post(
         buyerId: buyer.id,
         leadId: matchedLead?.id ?? null,
         comment: data.comment,
+        kind: "SALE",
         status: "PENDING",
         agentId: req.user!.id,
       },
@@ -288,12 +291,6 @@ crmRouter.patch(
  * Performance analytics of each agent, breakdown of submissions (pending, approved, rejected),
  * daily trend, and campaign distribution.
  */
-function csvCell(value: string) {
-  const text = String(value ?? "");
-  if (/[",\n]/.test(text)) return `"${text.replace(/"/g, '""')}"`;
-  return text;
-}
-
 function rangeStart(range: string, tzOffsetMin: number) {
   const now = new Date();
   const local = new Date(now.getTime() - tzOffsetMin * 60 * 1000);
@@ -312,8 +309,12 @@ crmRouter.get(
   "/sales-stats",
   requireSalesAccess,
   asyncHandler(async (_req, res) => {
+    const range = typeof _req.query.range === "string" ? _req.query.range : "all";
+    const tzRaw = Number(_req.query.tzOffset);
+    const tzOffsetMin = Number.isFinite(tzRaw) ? tzRaw : 0;
+    const from = range === "day" || range === "week" || range === "month" ? rangeStart(range, tzOffsetMin) : null;
     const entries = await prisma.crmEntry.findMany({
-      where: { pingId: null },
+      where: { pingId: null, kind: "SALE", ...(from ? { createdAt: { gte: from } } : {}) },
       orderBy: { createdAt: "asc" },
       select: {
         fronterName: true,
@@ -364,47 +365,241 @@ crmRouter.get(
   })
 );
 
+function exportRange(req: { query: { range?: unknown; tzOffset?: unknown } }) {
+  const range = req.query.range === "week" || req.query.range === "month" || req.query.range === "all" ? String(req.query.range) : "day";
+  const tzRaw = Number(req.query.tzOffset);
+  const tzOffsetMin = Number.isFinite(tzRaw) ? tzRaw : 0;
+  const from = range === "all" ? null : rangeStart(range, tzOffsetMin);
+  return { range, from };
+}
+
 crmRouter.get(
   "/export",
-  requireAdmin,
+  requireSalesAccess,
+  asyncHandler(async (req, res) => {
+    const { range, from } = exportRange(req);
+    const entries = await prisma.crmEntry.findMany({
+      where: { pingId: null, kind: "SALE", ...(from ? { createdAt: { gte: from } } : {}) },
+      orderBy: { createdAt: "desc" },
+      include: {
+        campaign: { select: { name: true } },
+        buyer: { select: { name: true } },
+        agent: { select: { name: true, email: true } },
+      },
+    });
+
+    const rows = entries.map((entry) => [
+      entry.createdAt.toISOString(),
+      entry.status,
+      entry.fronterName,
+      entry.closerName?.trim() || entry.agent?.name || "",
+      entry.agent?.email ?? "",
+      entry.customerName,
+      entry.customerNumber,
+      entry.customerZip,
+      entry.customerEmail,
+      entry.did,
+      entry.campaign?.name ?? "",
+      entry.buyer?.name ?? "",
+      entry.comment,
+    ]);
+    const file = await workbookFile(`sales-${range}.xlsx`, [
+      "Date",
+      "Status",
+      "Agent Name",
+      "Closer",
+      "Closer Email",
+      "Customer",
+      "Phone",
+      "ZIP",
+      "Email",
+      "DID",
+      "Campaign",
+      "Buyer",
+      "Comment",
+    ], rows);
+    res.json({ ...file, count: entries.length });
+  })
+);
+
+const noPickupSchema = z.object({
+  phone: z.string().trim().min(7).max(25),
+  campaignId: z.string().min(1, "Campaign is required"),
+  buyerId: z.string().min(1, "Buyer is required"),
+  reason: z.string().trim().min(1, "Reason is required").max(2000),
+  agentName: z.string().trim().min(1, "Agent name is required").max(120),
+  closerName: z.string().trim().min(1, "Closer name is required").max(120),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Choose a date"),
+});
+
+function reportedDate(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, day, 12));
+}
+
+function dateLabel(value: Date) {
+  return value.toISOString().slice(0, 10);
+}
+
+crmRouter.post(
+  "/no-pickup",
+  asyncHandler(async (req, res) => {
+    const data = noPickupSchema.parse(req.body);
+    const key = phoneKey(data.phone);
+    if (key.length !== 10) throw new HttpError(400, "Enter a 10-digit phone number");
+    const [buyer, campaign] = await Promise.all([
+      prisma.buyer.findUnique({ where: { id: data.buyerId }, select: { id: true, name: true } }),
+      prisma.campaign.findUnique({ where: { id: data.campaignId }, select: { id: true, name: true } }),
+    ]);
+    if (!buyer) throw new HttpError(400, "Choose the buyer that did not pick up");
+    if (!campaign) throw new HttpError(400, "Choose a campaign");
+
+    const leadMatches = await prisma.lead.findMany({
+      where: { phone: { contains: key } },
+      orderBy: { createdAt: "desc" },
+      take: 20,
+      select: { id: true, phone: true },
+    });
+    const matchedLead = leadMatches.find((lead) => phoneKey(lead.phone) === key);
+
+    const entry = await prisma.crmEntry.create({
+      data: {
+        fronterName: data.agentName,
+        closerName: data.closerName,
+        customerName: "No pickup",
+        customerNumber: key,
+        customerZip: "",
+        campaignId: campaign.id,
+        buyerId: buyer.id,
+        leadId: matchedLead?.id ?? null,
+        comment: data.reason,
+        kind: "NO_PICKUP",
+        reportedAt: reportedDate(data.date),
+        status: "REJECTED",
+        reviewedAt: new Date(),
+        agentId: req.user!.id,
+      },
+      include: {
+        campaign: { select: { name: true } },
+        buyer: { select: { name: true } },
+        agent: { select: { name: true, email: true } },
+      },
+    });
+
+    res.status(201).json({
+      entry: {
+        id: entry.id,
+        phone: req.user!.role === "CLOSER" ? maskCustomerNumber(entry.customerNumber) : entry.customerNumber,
+        campaign: entry.campaign?.name ?? "",
+        buyer: entry.buyer?.name ?? "",
+        reason: entry.comment,
+        agentName: entry.fronterName,
+        closerName: entry.closerName,
+        date: entry.reportedAt ? dateLabel(entry.reportedAt) : data.date,
+      },
+    });
+  })
+);
+
+crmRouter.get(
+  "/no-pickup",
+  asyncHandler(async (req, res) => {
+    const seeAll = req.user!.role === "ADMIN" || req.user!.role === "MANAGER";
+    const entries = await prisma.crmEntry.findMany({
+      where: { kind: "NO_PICKUP", ...(seeAll ? {} : { agentId: req.user!.id }) },
+      orderBy: { createdAt: "desc" },
+      take: 200,
+      include: {
+        campaign: { select: { name: true } },
+        buyer: { select: { name: true } },
+      },
+    });
+    res.json({
+      entries: entries.map((entry) => ({
+        id: entry.id,
+        phone: seeAll ? entry.customerNumber : maskCustomerNumber(entry.customerNumber),
+        campaign: entry.campaign?.name ?? "",
+        buyer: entry.buyer?.name ?? "",
+        reason: entry.comment,
+        agentName: entry.fronterName,
+        closerName: entry.closerName?.trim() || "",
+        date: entry.reportedAt ? dateLabel(entry.reportedAt) : entry.createdAt.toISOString().slice(0, 10),
+        createdAt: entry.createdAt.toISOString(),
+      })),
+    });
+  })
+);
+
+crmRouter.get(
+  "/no-pickup/export",
+  requireSalesAccess,
+  asyncHandler(async (req, res) => {
+    const { range, from } = exportRange(req);
+    const entries = await prisma.crmEntry.findMany({
+      where: { kind: "NO_PICKUP", ...(from ? { reportedAt: { gte: from } } : {}) },
+      orderBy: { reportedAt: "desc" },
+      include: {
+        campaign: { select: { name: true } },
+        buyer: { select: { name: true } },
+        agent: { select: { email: true } },
+      },
+    });
+    const rows = entries.map((entry) => [
+      entry.reportedAt ? dateLabel(entry.reportedAt) : entry.createdAt.toISOString().slice(0, 10),
+      entry.customerNumber,
+      entry.campaign?.name ?? "",
+      entry.buyer?.name ?? "",
+      entry.comment,
+      entry.fronterName,
+      entry.closerName?.trim() || entry.agent?.email || "",
+    ]);
+    const file = await workbookFile(`no-pickup-${range}.xlsx`, [
+      "Date",
+      "Phone",
+      "Campaign",
+      "Buyer",
+      "Reason",
+      "Agent Name",
+      "Closer",
+    ], rows);
+    res.json({ ...file, count: entries.length });
+  })
+);
+
+crmRouter.get(
+  "/my-sales",
   asyncHandler(async (req, res) => {
     const range = req.query.range === "week" || req.query.range === "month" ? req.query.range : "day";
     const tzRaw = Number(req.query.tzOffset);
     const tzOffsetMin = Number.isFinite(tzRaw) ? tzRaw : 0;
     const from = rangeStart(range, tzOffsetMin);
     const entries = await prisma.crmEntry.findMany({
-      where: { pingId: null, createdAt: { gte: from } },
+      where: { pingId: null, kind: "SALE", agentId: req.user!.id, createdAt: { gte: from } },
       orderBy: { createdAt: "desc" },
       include: {
         campaign: { select: { name: true } },
-        agent: { select: { name: true, email: true } },
+        buyer: { select: { name: true } },
       },
     });
-
-    const lines = [
-      ["Date", "Status", "Agent Name", "Closer", "Closer Email", "Customer", "Phone", "ZIP", "Campaign", "Comment"].join(","),
-    ];
+    const counts = { pending: 0, approved: 0, rejected: 0, total: entries.length };
     for (const entry of entries) {
-      lines.push(
-        [
-          entry.createdAt.toISOString(),
-          entry.status,
-          csvCell(entry.fronterName),
-          csvCell(entry.closerName?.trim() || entry.agent?.name || ""),
-          csvCell(entry.agent?.email ?? ""),
-          csvCell(entry.customerName),
-          csvCell(entry.customerNumber),
-          csvCell(entry.customerZip),
-          csvCell(entry.campaign?.name ?? ""),
-          csvCell(entry.comment),
-        ].join(",")
-      );
+      if (entry.status === "PENDING") counts.pending += 1;
+      else if (entry.status === "APPROVED") counts.approved += 1;
+      else if (entry.status === "REJECTED") counts.rejected += 1;
     }
-
     res.json({
-      filename: `sales-${range}.csv`,
-      count: entries.length,
-      csv: lines.join("\n"),
+      range,
+      ...counts,
+      entries: entries.map((entry) => ({
+        id: entry.id,
+        createdAt: entry.createdAt.toISOString(),
+        status: entry.status,
+        customerName: entry.customerName,
+        phone: maskCustomerNumber(entry.customerNumber),
+        buyer: entry.buyer?.name ?? "",
+        campaign: entry.campaign?.name ?? "",
+        agentName: entry.fronterName,
+      })),
     });
   })
 );
@@ -419,7 +614,7 @@ crmRouter.get(
       orderBy: { name: "asc" },
     });
 
-    const formOnly = { pingId: null };
+    const formOnly = { pingId: null, kind: "SALE" };
     const [statusCounts, agentStats, campaignStats, dailyTrend] = await Promise.all([
       prisma.crmEntry.groupBy({
         by: ["status"],

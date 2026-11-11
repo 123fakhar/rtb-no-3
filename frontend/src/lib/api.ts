@@ -41,6 +41,19 @@ export function setStoredUser(user: User | null) {
   else localStorage.removeItem("rtb_user");
 }
 
+export function downloadBase64(filename: string, base64: string, mime: string) {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  const blob = new Blob([bytes], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 export async function apiRequest<T = any>(
   path: string,
   options: RequestInit = {}

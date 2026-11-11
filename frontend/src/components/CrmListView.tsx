@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { apiRequest } from "@/lib/api";
+import { putCache, takeCache } from "@/lib/tabCache";
 import { useAuth } from "@/context/AuthContext";
 import {
   Search,
@@ -24,15 +25,18 @@ export function CrmListView({
 }: CrmListViewProps) {
   const { user, isAdmin } = useAuth();
   const seesPhone = user?.role === "ADMIN" || user?.role === "MANAGER";
-  const [entries, setEntries] = useState<any[]>([]);
+  const [entries, setEntries] = useState<any[]>(() => takeCache<any[]>(`crm:${user?.id ?? ""}::`) ?? []);
   const [buyers, setBuyers] = useState<{ id: string; name: string }[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => takeCache(`crm:${user?.id ?? ""}::`) == null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+  const crmKey = `crm:${user?.id ?? ""}:${search}:${statusFilter}`;
 
   const loadEntries = async () => {
-    setLoading(true);
+    const cached = takeCache<any[]>(crmKey);
+    if (cached) setEntries(cached);
+    else setLoading(true);
     try {
       const q = new URLSearchParams({
         page: "1",
@@ -42,6 +46,7 @@ export function CrmListView({
       });
       const res = await apiRequest<{ entries: any[] }>(`/api/crm?${q.toString()}`);
       setEntries(res.entries);
+      putCache(crmKey, res.entries);
     } catch (err) {
       console.error("Failed to load CRM entries:", err);
     } finally {
@@ -181,7 +186,7 @@ export function CrmListView({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-xs">
-              {loading ? (
+              {loading && entries.length === 0 ? (
                 <tr>
                   <td colSpan={11} className="py-12 text-center text-slate-400">
                     <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-blue-600" />

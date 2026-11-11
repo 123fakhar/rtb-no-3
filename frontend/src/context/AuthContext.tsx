@@ -2,6 +2,8 @@
 
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { User, apiRequest, getStoredUser, getToken, setStoredUser, setToken } from "@/lib/api";
+import { clearDashboardCache } from "@/lib/dashboardData";
+import { clearTabCache } from "@/lib/tabCache";
 
 interface AuthContextType {
   user: User | null;
@@ -41,6 +43,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setStoredUser(null);
           setUser(null);
           setTokenState(null);
+          clearTabCache();
+          clearDashboardCache();
         })
         .finally(() => {
           setLoading(false);
@@ -51,6 +55,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const login = async (email: string, password: string): Promise<User> => {
+    clearTabCache();
+    clearDashboardCache();
     const res = await apiRequest<{ token: string; user: User }>("/api/auth/login", {
       method: "POST",
       body: JSON.stringify({ email, password }),
@@ -80,6 +86,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setStoredUser(null);
     setUser(null);
     setTokenState(null);
+    clearTabCache();
+    clearDashboardCache();
   };
 
   return (

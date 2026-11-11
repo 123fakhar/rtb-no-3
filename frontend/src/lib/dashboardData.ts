@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiRequest } from "@/lib/api";
 
 export type RangePreset = "today" | "7d" | "30d" | "custom";
@@ -124,7 +124,7 @@ export const emptyFilters = (): DashFilters => {
   const start = new Date(today);
   start.setDate(start.getDate() - 29);
   return {
-    preset: "today",
+    preset: "7d",
     from: iso(start),
     to: iso(today),
     campaignId: "",
@@ -206,35 +206,80 @@ export function bucketLabel(key: string, hourly: boolean, spanDays: number) {
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
+const dashboardCache = new Map<string, DashboardData>();
+const dashboardInflight = new Map<string, Promise<DashboardData>>();
+
+export function clearDashboardCache() {
+  dashboardCache.clear();
+}
+
+function filtersKey(filters: DashFilters) {
+  return [
+    filters.preset,
+    filters.preset === "custom" ? filters.from : "",
+    filters.preset === "custom" ? filters.to : "",
+    filters.campaignId,
+    filters.buyerId,
+    filters.provider,
+    filters.state,
+  ].join("|");
+}
+
 export function useDashboard(filters: DashFilters, pollMs = 8000) {
   const query = useMemo(() => dashboardQuery(filters), [filters]);
-  const [data, setData] = useState<DashboardData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const key = useMemo(() => filtersKey(filters), [filters]);
+  const [data, setData] = useState<DashboardData | null>(() => dashboardCache.get(key) ?? null);
+  const [loading, setLoading] = useState(() => !dashboardCache.has(key));
   const [error, setError] = useState<string | null>(null);
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
+  const keyRef = useRef(key);
+  keyRef.current = key;
 
   const load = useCallback(
     async (silent: boolean) => {
-      if (!silent) setLoading(true);
+      const requestKey = key;
+      const cached = dashboardCache.get(requestKey);
+      if (!silent && !cached) setLoading(true);
       try {
-        const res = await apiRequest<DashboardData>(`/api/analytics/dashboard?${query}`);
+        let pending = dashboardInflight.get(query);
+        if (!pending) {
+          pending = apiRequest<DashboardData>(`/api/analytics/dashboard?${query}`).finally(() => {
+            dashboardInflight.delete(query);
+          });
+          dashboardInflight.set(query, pending);
+        }
+        const res = await pending;
+        dashboardCache.set(requestKey, res);
+        if (keyRef.current !== requestKey) return;
         setData(res);
         setError(null);
         setUpdatedAt(new Date());
       } catch (err: any) {
-        if (!silent) setError(err?.message || "Could not load dashboard");
+        if (keyRef.current !== requestKey) return;
+        if (!silent && !dashboardCache.get(requestKey)) setError(err?.message || "Could not load dashboard");
       } finally {
-        if (!silent) setLoading(false);
+        if (keyRef.current === requestKey && !silent) setLoading(false);
       }
     },
-    [query]
+    [query, key]
   );
 
   useEffect(() => {
-    load(false);
-    const timer = window.setInterval(() => load(true), pollMs);
+    const cached = dashboardCache.get(key);
+    if (cached) {
+      setData(cached);
+      setLoading(false);
+    } else {
+      setData(null);
+      setLoading(true);
+    }
+    load(Boolean(cached));
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "hidden") return;
+      load(true);
+    }, pollMs);
     return () => window.clearInterval(timer);
-  }, [load, pollMs]);
+  }, [load, pollMs, key]);
 
   return { data, loading, error, updatedAt, refresh: () => load(false) };
 }

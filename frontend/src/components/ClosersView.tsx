@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { apiRequest } from "@/lib/api";
+import { putCache, takeCache } from "@/lib/tabCache";
 import { Loader2 } from "lucide-react";
 
 interface Closer {
@@ -13,13 +14,16 @@ interface Closer {
 }
 
 export function ClosersView() {
-  const [closers, setClosers] = useState<Closer[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [closers, setClosers] = useState<Closer[]>(() => takeCache<Closer[]>("closers") ?? []);
+  const [loading, setLoading] = useState(() => takeCache("closers") == null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     apiRequest<{ users: Closer[] }>("/api/users/closers")
-      .then((res) => setClosers(res.users))
+      .then((res) => {
+        setClosers(res.users);
+        putCache("closers", res.users);
+      })
       .catch((err) => setError(err.message || "Could not load closers"))
       .finally(() => setLoading(false));
   }, []);
@@ -34,7 +38,7 @@ export function ClosersView() {
       </div>
       {error && <div className="p-3 rounded-2xl bg-rose-50 text-rose-700 text-xs">{error}</div>}
       <div className="kukie-card-static overflow-hidden">
-        {loading ? (
+        {loading && closers.length === 0 ? (
           <div className="p-12 flex justify-center">
             <Loader2 className="w-6 h-6 animate-spin text-slate-700" />
           </div>

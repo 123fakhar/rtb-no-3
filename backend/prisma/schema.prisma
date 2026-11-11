@@ -177,6 +177,7 @@ model Ping {
 
   @@index([leadId])
   @@index([agentId])
+  @@index([buyerId])
   @@index([createdAt])
 }
 
@@ -197,6 +198,8 @@ model CrmEntry {
   buyerId        String?
   buyer          Buyer?    @relation(fields: [buyerId], references: [id], onDelete: SetNull)
   pingId         String?
+  kind           String    @default("SALE")
+  reportedAt     DateTime?
   status         CrmStatus @default(PENDING)
   agentId        String
   agent          User      @relation(fields: [agentId], references: [id])
@@ -211,6 +214,8 @@ model CrmEntry {
   @@index([leadId])
   @@index([buyerId])
   @@index([pingId])
+  @@index([kind])
+  @@index([customerNumber])
 }
 
 model ApiLog {

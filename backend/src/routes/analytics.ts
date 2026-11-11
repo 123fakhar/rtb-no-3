@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { asyncHandler } from "../lib/http";
 import { canSeeRevenue, requireAdmin, requireAuth } from "../middleware/auth";
-import { agentPerformance, dashboard, performanceForUser } from "../services/analytics";
+import { agentPerformance, dashboard, performanceForUser, type DashboardQuery } from "../services/analytics";
 
 export const analyticsRouter = Router();
 
@@ -17,6 +17,43 @@ function parseDate(value: unknown, fallback: Date): Date {
   return Number.isNaN(d.getTime()) ? fallback : d;
 }
 
+const dashboardCache = new Map<string, { at: number; data: unknown }>();
+const dashboardInflight = new Map<string, Promise<unknown>>();
+const DASHBOARD_TTL_MS = 12_000;
+
+function dashboardCacheKey(query: DashboardQuery) {
+  const toBucket = Math.floor(query.to.getTime() / 15_000);
+  return [
+    query.from.toISOString(),
+    String(toBucket),
+    String(query.tzOffsetMin),
+    query.campaignId ?? "",
+    query.buyerId ?? "",
+    query.provider ?? "",
+    query.state ?? "",
+  ].join("|");
+}
+
+function loadDashboard(query: DashboardQuery) {
+  const key = dashboardCacheKey(query);
+  const hit = dashboardCache.get(key);
+  if (hit && Date.now() - hit.at < DASHBOARD_TTL_MS) return Promise.resolve(hit.data);
+  const pending = dashboardInflight.get(key);
+  if (pending) return pending;
+  const promise = dashboard(query)
+    .then((data) => {
+      dashboardCache.set(key, { at: Date.now(), data });
+      if (dashboardCache.size > 40) {
+        const oldest = [...dashboardCache.entries()].sort((a, b) => a[1].at - b[1].at)[0];
+        if (oldest) dashboardCache.delete(oldest[0]);
+      }
+      return data;
+    })
+    .finally(() => dashboardInflight.delete(key));
+  dashboardInflight.set(key, promise);
+  return promise;
+}
+
 analyticsRouter.get(
   "/dashboard",
   requireAdmin,
@@ -28,7 +65,7 @@ analyticsRouter.get(
     const tzRaw = Number(req.query.tzOffset);
     const tzOffsetMin = Number.isFinite(tzRaw) ? tzRaw : 0;
 
-    const data = await dashboard({
+    const data = await loadDashboard({
       from,
       to,
       tzOffsetMin,

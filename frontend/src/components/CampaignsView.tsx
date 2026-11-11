@@ -2,11 +2,12 @@
 
 import React, { useEffect, useState } from "react";
 import { apiRequest } from "@/lib/api";
+import { putCache, takeCache } from "@/lib/tabCache";
 import { Plus, MoreHorizontal, Loader2, X, Check, CheckCircle2, XCircle } from "lucide-react";
 
 export function CampaignsView() {
-  const [campaigns, setCampaigns] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [campaigns, setCampaigns] = useState<any[]>(() => takeCache<any[]>("campaigns") ?? []);
+  const [loading, setLoading] = useState(() => takeCache("campaigns") == null);
   const [selectedCampaign, setSelectedCampaign] = useState<any | null>(null);
   const [campaignConfigs, setCampaignConfigs] = useState<any[]>([]);
   const [loadingConfigs, setLoadingConfigs] = useState(false);
@@ -18,10 +19,13 @@ export function CampaignsView() {
   const [formError, setFormError] = useState<string | null>(null);
 
   const loadCampaigns = async () => {
-    setLoading(true);
+    const cached = takeCache<any[]>("campaigns");
+    if (cached) setCampaigns(cached);
+    else setLoading(true);
     try {
       const res = await apiRequest<{ campaigns: any[] }>("/api/campaigns");
       setCampaigns(res.campaigns);
+      putCache("campaigns", res.campaigns);
     } catch (err) {
       console.error("Failed to load campaigns:", err);
     } finally {
@@ -119,7 +123,7 @@ export function CampaignsView() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-xs">
-              {loading ? (
+              {loading && campaigns.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="py-12 text-center text-slate-400">
                     <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-blue-600" />

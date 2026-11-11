@@ -197,7 +197,16 @@ pingsRouter.get(
         orderBy: { createdAt: "desc" },
         skip,
         take: limit,
-        include: {
+        select: {
+          id: true,
+          leadId: true,
+          status: true,
+          bid: true,
+          trackingNumber: true,
+          rejectReason: true,
+          durationMs: true,
+          httpStatus: true,
+          createdAt: true,
           buyer: { select: { id: true, name: true, provider: true } },
           config: { select: { id: true, name: true, campaign: { select: { name: true } } } },
           lead: { select: { id: true, phone: true, state: true } },

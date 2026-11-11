@@ -20,6 +20,7 @@ import {
   CircleDollarSign,
   Target,
   PieChart,
+  PhoneOff,
 } from "lucide-react";
 
 interface SidebarProps {
@@ -42,6 +43,7 @@ export function Sidebar({ currentTab, onTabChange }: SidebarProps) {
     { id: "reports", label: "Reports", icon: LineChart },
     { id: "crm", label: "CRM", icon: ClipboardList },
     { id: "sales-stats", label: "Sales Stats", icon: PieChart },
+    { id: "no-pickups", label: "No Pickups", icon: PhoneOff },
     { id: "crm-analytics", label: "CRM Analytics", icon: PieChart },
     { id: "settings", label: "Settings", icon: Settings },
   ];
@@ -50,14 +52,18 @@ export function Sidebar({ currentTab, onTabChange }: SidebarProps) {
     { id: "my-performance", label: "Closer Performance", icon: BarChart3 },
     { id: "submit-lead", label: "Submit Lead", icon: PlusCircle },
     { id: "my-leads", label: "My Leads", icon: Send },
+    { id: "my-sales", label: "My Sales", icon: PieChart },
     { id: "submit-crm", label: "Submit CRM", icon: FilePlus },
     { id: "my-crm", label: "CRM Entries", icon: ClipboardList },
+    { id: "submit-no-pickup", label: "No Pickup", icon: PhoneOff },
+    { id: "no-pickups", label: "No Pickups", icon: ClipboardList },
     { id: "account", label: "My Account", icon: Settings },
   ];
 
   const managerNav = [
     { id: "sales", label: "Sales", icon: ClipboardList },
     { id: "sales-stats", label: "Sales Stats", icon: PieChart },
+    { id: "no-pickups", label: "No Pickups", icon: PhoneOff },
     { id: "closers", label: "Closers", icon: Users },
   ];
 

@@ -22,6 +22,9 @@ import { AgentPerformanceView } from "@/components/AgentPerformanceView";
 import { SalesStatsView } from "@/components/SalesStatsView";
 import { ClosersView } from "@/components/ClosersView";
 import { AccountView } from "@/components/AccountView";
+import { NoPickupFormView } from "@/components/NoPickupFormView";
+import { NoPickupListView } from "@/components/NoPickupListView";
+import { CloserReportView } from "@/components/CloserReportView";
 import { BrandLogo } from "@/components/BrandLogo";
 import { Loader2, ArrowRight } from "lucide-react";
 
@@ -49,12 +52,13 @@ function tabAllowed(tab: string, role: string | undefined) {
       "reports",
       "crm",
       "sales-stats",
+      "no-pickups",
       "crm-analytics",
       "settings",
     ].includes(tab);
   }
-  if (role === "MANAGER") return ["sales", "sales-stats", "closers"].includes(tab);
-  return ["my-performance", "account"].includes(tab);
+  if (role === "MANAGER") return ["sales", "sales-stats", "no-pickups", "closers"].includes(tab);
+  return ["my-performance", "my-sales", "submit-no-pickup", "no-pickups", "account"].includes(tab);
 }
 
 function sameUrl() {
@@ -305,11 +309,13 @@ export default function HomePage() {
             />
           )}
           {isAdmin && currentTab === "sales-stats" && <SalesStatsView />}
+          {isAdmin && currentTab === "no-pickups" && <NoPickupListView />}
           {isAdmin && currentTab === "crm-analytics" && <CrmAnalyticsView />}
           {isAdmin && currentTab === "settings" && <UsersView />}
 
           {isManager && currentTab === "sales" && <CrmListView title="Sales" />}
           {isManager && currentTab === "sales-stats" && <SalesStatsView />}
+          {isManager && currentTab === "no-pickups" && <NoPickupListView />}
           {isManager && currentTab === "closers" && <ClosersView />}
 
           {/* Agent Views */}
@@ -339,6 +345,13 @@ export default function HomePage() {
               title="My CRM Submissions"
               onNewSubmissionClick={() => goToTab("submit-crm")}
             />
+          )}
+          {!isAdmin && !isManager && currentTab === "my-sales" && <CloserReportView />}
+          {!isAdmin && !isManager && currentTab === "submit-no-pickup" && (
+            <NoPickupFormView onSuccess={() => goToTab("no-pickups")} />
+          )}
+          {!isAdmin && !isManager && currentTab === "no-pickups" && (
+            <NoPickupListView onNew={() => goToTab("submit-no-pickup")} />
           )}
           {!isAdmin && !isManager && currentTab === "my-performance" && <AgentPerformanceView />}
           {!isAdmin && !isManager && currentTab === "account" && <AccountView />}

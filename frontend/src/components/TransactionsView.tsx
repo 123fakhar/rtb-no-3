@@ -2,15 +2,19 @@
 
 import React, { useEffect, useState } from "react";
 import { apiRequest } from "@/lib/api";
+import { putCache, takeCache } from "@/lib/tabCache";
 import { Loader2, RefreshCw, CheckCircle2, XCircle, AlertCircle } from "lucide-react";
 
 export function TransactionsView() {
-  const [transactions, setTransactions] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [transactions, setTransactions] = useState<any[]>(() => takeCache<any[]>("bids:") ?? []);
+  const [loading, setLoading] = useState(() => takeCache("bids:") == null);
   const [statusFilter, setStatusFilter] = useState("");
 
   const loadTransactions = async () => {
-    setLoading(true);
+    const key = `bids:${statusFilter}`;
+    const cached = takeCache<any[]>(key);
+    if (cached) setTransactions(cached);
+    else setLoading(true);
     try {
       const q = new URLSearchParams({
         page: "1",
@@ -19,6 +23,7 @@ export function TransactionsView() {
       });
       const res = await apiRequest<{ transactions: any[] }>(`/api/transactions?${q.toString()}`);
       setTransactions(res.transactions);
+      putCache(key, res.transactions);
     } catch (err) {
       console.error("Failed to load transactions:", err);
     } finally {
@@ -89,7 +94,7 @@ export function TransactionsView() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-xs">
-              {loading ? (
+              {loading && transactions.length === 0 ? (
                 <tr>
                   <td colSpan={9} className="py-12 text-center text-slate-400">
                     <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-blue-600" />

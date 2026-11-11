@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { apiRequest } from "@/lib/api";
+import { putCache, takeCache } from "@/lib/tabCache";
 import { Loader2 } from "lucide-react";
 
 interface Performance {
@@ -15,17 +16,20 @@ interface Performance {
 }
 
 export function AgentPerformanceView() {
-  const [data, setData] = useState<Performance | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<Performance | null>(() => takeCache<Performance>("my-performance") ?? null);
+  const [loading, setLoading] = useState(() => takeCache("my-performance") == null);
 
   useEffect(() => {
     apiRequest<{ performance: Performance }>("/api/analytics/me")
-      .then((res) => setData(res.performance))
+      .then((res) => {
+        setData(res.performance);
+        putCache("my-performance", res.performance);
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading || !data) {
+  if ((loading && !data) || !data) {
     return (
       <div className="p-16 flex justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-slate-700" />

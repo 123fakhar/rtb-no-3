@@ -47,21 +47,34 @@ export function LeadBuyerRouting({ leadId, onClose }: LeadBuyerRoutingProps) {
   const [saleNotice, setSaleNotice] = useState<string | null>(null);
   const [zipDraft, setZipDraft] = useState("");
   const watchConfig = useRef<string | null>(null);
+  const leadRef = useRef(leadId);
+  leadRef.current = leadId;
 
   const loadData = async () => {
+    const requested = leadId;
     try {
       const res = await apiRequest<{ lead: any; buyers: any[]; history: any[]; blockedBuyers?: BuyerBlock[] }>(
-        `/api/leads/${leadId}/routing`
+        `/api/leads/${requested}/routing`
       );
-      setData(res);
+      if (leadRef.current !== requested) return;
+      setData((prev) => {
+        if (!prev) return res;
+        const sameHistory =
+          prev.history.length === res.history.length && prev.history[0]?.id === res.history[0]?.id;
+        const sameLead = prev.lead?.zip === res.lead?.zip && prev.lead?.status === res.lead?.status;
+        const sameBlocks = JSON.stringify(prev.blockedBuyers ?? []) === JSON.stringify(res.blockedBuyers ?? []);
+        return sameHistory && sameLead && sameBlocks ? prev : res;
+      });
     } catch (err) {
       console.error("Failed to load routing data:", err);
     } finally {
-      setLoading(false);
+      if (leadRef.current === requested) setLoading(false);
     }
   };
 
   useEffect(() => {
+    setLoading(true);
+    setData(null);
     loadData();
     const timer = setInterval(loadData, 5000);
     return () => clearInterval(timer);

@@ -2,11 +2,12 @@
 
 import React, { useEffect, useState } from "react";
 import { apiRequest } from "@/lib/api";
+import { putCache, takeCache } from "@/lib/tabCache";
 import { Plus, UserPlus, Loader2, X, Shield, Users } from "lucide-react";
 
 export function UsersView() {
-  const [users, setUsers] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [users, setUsers] = useState<any[]>(() => takeCache<any[]>("users") ?? []);
+  const [loading, setLoading] = useState(() => takeCache("users") == null);
   const [showModal, setShowModal] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -16,10 +17,13 @@ export function UsersView() {
   const [error, setError] = useState<string | null>(null);
 
   const loadUsers = async () => {
-    setLoading(true);
+    const cached = takeCache<any[]>("users");
+    if (cached) setUsers(cached);
+    else setLoading(true);
     try {
       const res = await apiRequest<{ users: any[] }>("/api/users");
       setUsers(res.users);
+      putCache("users", res.users);
     } catch (err) {
       console.error("Failed to load users:", err);
     } finally {
@@ -114,7 +118,7 @@ export function UsersView() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-xs">
-              {loading ? (
+              {loading && users.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="py-12 text-center text-slate-400">
                     <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-blue-600" />

@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { apiRequest } from "@/lib/api";
+import { putCache, takeCache } from "@/lib/tabCache";
 import {
   BarChart,
   Bar,
@@ -33,8 +34,8 @@ export function CrmAnalyticsView() {
     totals: any;
     agentPerformance: any[];
     dailyTrend: any[];
-  } | null>(null);
-  const [loading, setLoading] = useState(true);
+  } | null>(() => takeCache("crm-analytics") ?? null);
+  const [loading, setLoading] = useState(() => takeCache("crm-analytics") == null);
 
   useEffect(() => {
     apiRequest<{
@@ -42,12 +43,15 @@ export function CrmAnalyticsView() {
       agentPerformance: any[];
       dailyTrend: any[];
     }>("/api/crm/analytics")
-      .then(setData)
+      .then((res) => {
+        setData(res);
+        putCache("crm-analytics", res);
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading || !data) {
+  if (!data) {
     return (
       <div className="p-16 flex flex-col items-center justify-center gap-3">
         <Loader2 className="w-8 h-8 animate-spin text-blue-600" />

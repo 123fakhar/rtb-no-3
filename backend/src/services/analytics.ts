@@ -137,7 +137,6 @@ export async function dashboard(query: DashboardQuery) {
         buyerId: true,
         campaignId: true,
         createdAt: true,
-        campaign: { select: { id: true, name: true } },
       },
       orderBy: { createdAt: "desc" },
       take: 20000,
@@ -154,9 +153,9 @@ export async function dashboard(query: DashboardQuery) {
         httpStatus: true,
         durationMs: true,
         createdAt: true,
-        lead: { select: { id: true, phone: true, state: true, campaignId: true, campaign: { select: { name: true } } } },
-        buyer: { select: { id: true, name: true, provider: true } },
-        config: { select: { provider: true, campaign: { select: { id: true, name: true } } } },
+        lead: { select: { campaignId: true, phone: true } },
+        buyer: { select: { provider: true } },
+        config: { select: { provider: true, campaignId: true } },
       },
       orderBy: { createdAt: "desc" },
       take: 20000,
@@ -179,12 +178,6 @@ export async function dashboard(query: DashboardQuery) {
       },
     }),
   ]);
-
-  const soldRows = await prisma.crmEntry.findMany({
-    where: { status: "APPROVED", pingId: { not: null } },
-    select: { pingId: true },
-  });
-  const soldPingIds = new Set(soldRows.map((row) => row.pingId).filter((id): id is string => Boolean(id)));
 
   const providerFilter = query.provider?.toLowerCase();
   const filteredPings = providerFilter
@@ -247,12 +240,12 @@ export async function dashboard(query: DashboardQuery) {
 
   for (const ping of filteredPings) {
     const bid = ping.bid == null ? null : money(ping.bid);
-    const won = soldPingIds.has(ping.id);
+    const won = ping.status === "RESERVED" && bid != null && bid > 0;
     const responded = ping.httpStatus != null && ping.httpStatus < 500;
     const valid = bid != null && bid > 0;
     const hard = isHardFailure(ping.httpStatus, ping.rejectReason);
     const providerKey = (ping.config?.provider || ping.buyer?.provider || "unknown").toLowerCase();
-    const campaignId = ping.config?.campaign?.id ?? ping.lead?.campaignId ?? "unassigned";
+    const campaignId = ping.config?.campaignId ?? ping.lead?.campaignId ?? "unassigned";
 
     if (responded) buyerResponses += 1;
     if (valid) {
@@ -330,12 +323,13 @@ export async function dashboard(query: DashboardQuery) {
     if (row) row.leads += 1;
   }
   for (const ping of filteredPings) {
-    if (!soldPingIds.has(ping.id)) continue;
+    const amount = ping.status === "RESERVED" && ping.bid != null ? money(ping.bid) : 0;
+    if (amount <= 0) continue;
     const key = hourly ? localParts(ping.createdAt, tzOffsetMin).hour : localParts(ping.createdAt, tzOffsetMin).date;
     const row = series.get(key);
     if (!row) continue;
     row.wins += 1;
-    row.revenue += ping.bid == null ? 0 : money(ping.bid);
+    row.revenue += amount;
   }
 
   const buyers = buyerRows
@@ -437,16 +431,16 @@ export async function dashboard(query: DashboardQuery) {
     .sort((a, b) => b.count - a.count);
 
   const activity = filteredPings.slice(0, 20).map((ping) => {
-    const won = soldPingIds.has(ping.id);
     const bid = ping.bid == null ? null : money(ping.bid);
+    const won = ping.status === "RESERVED" && bid != null && bid > 0;
     return {
       id: ping.id,
       at: ping.createdAt.toISOString(),
       leadId: ping.leadId,
       leadLabel: `#${ping.leadId.slice(-6)}`,
       phone: ping.lead?.phone ?? "",
-      campaign: ping.config?.campaign?.name ?? ping.lead?.campaign?.name ?? "Unassigned",
-      buyer: ping.buyer?.name ?? "Buyer",
+      campaign: campaignName.get(ping.config?.campaignId ?? ping.lead?.campaignId ?? "") ?? "Unassigned",
+      buyer: (ping.buyerId && buyerName.get(ping.buyerId)) || "Buyer",
       bid: won || ping.status === "RESERVED" || (bid != null && bid > 0) ? bid : null,
       status: won ? "WON" : ping.status === "RESERVED" ? "BID" : ping.status === "ERROR" ? "ERROR" : "REJECTED",
       reason: won || ping.status === "RESERVED" ? null : bucketReason(ping.rejectReason, ping.httpStatus),
@@ -459,7 +453,7 @@ export async function dashboard(query: DashboardQuery) {
     label: `#${lead.id.slice(-6)}`,
     phone: lead.phone,
     state: lead.state,
-    campaign: lead.campaign?.name ?? "Unassigned",
+    campaign: (lead.campaignId && campaignName.get(lead.campaignId)) || "Unassigned",
     buyer: lead.buyerId ? buyerName.get(lead.buyerId) ?? null : null,
     bid: money(lead.revenue) > 0 ? money(lead.revenue) : null,
     status: lead.status === "SOLD" ? "WON" : lead.status === "REJECTED" ? "REJECTED" : "OPEN",
@@ -527,7 +521,7 @@ export async function performanceForUser(userId: string) {
     prisma.lead.count({ where: { agentId: userId } }),
     prisma.lead.count({ where: { agentId: userId, status: "SOLD" } }),
     prisma.lead.aggregate({ where: { agentId: userId }, _sum: { revenue: true } }),
-    prisma.crmEntry.groupBy({ by: ["status"], where: { agentId: userId, pingId: null }, _count: true }),
+    prisma.crmEntry.groupBy({ by: ["status"], where: { agentId: userId, pingId: null, kind: "SALE" }, _count: true }),
   ]);
 
   const crm = { PENDING: 0, APPROVED: 0, REJECTED: 0 };
@@ -554,7 +548,7 @@ export async function agentPerformance() {
     prisma.lead.groupBy({ by: ["agentId"], _count: true }),
     prisma.lead.groupBy({ by: ["agentId"], where: { status: "SOLD" }, _count: true }),
     prisma.lead.groupBy({ by: ["agentId"], _sum: { revenue: true } }),
-    prisma.crmEntry.groupBy({ by: ["agentId", "status"], where: { pingId: null }, _count: true }),
+    prisma.crmEntry.groupBy({ by: ["agentId", "status"], where: { pingId: null, kind: "SALE" }, _count: true }),
   ]);
 
   const countOf = (rows: { agentId: string; _count: number }[]) => new Map(rows.map((r) => [r.agentId, r._count]));
