@@ -29,6 +29,7 @@ function providerLabel(key: string): string {
     ringfuel: "RingFuel",
     retreaver: "Retreaver",
     trackdrive: "TrackDrive",
+    callgrid: "CallGrid",
     unset: "Unassigned",
     unknown: "Unassigned",
   };

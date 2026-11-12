@@ -110,6 +110,19 @@ export function createGenericAdapter(opts: {
           if (!allowed.has(pairs[i].key)) pairs.splice(i, 1);
         }
       }
+
+      if (ctx.provider === "callgrid") {
+        const caller = e164Phone(ctx.lead.phone);
+        const postal = postalCode(ctx.lead.zip);
+        const configuredSub = pairs.find((pair) => pair.key === "SubPublisherid")?.value || "";
+        const sub = configuredSub || extraValue("publisherId", "subPublisherId") || "Seagulls";
+        const pstn = pairs.find((pair) => pair.key.toLowerCase() === "pstn")?.value || "true";
+        pairs.length = 0;
+        if (caller) pairs.push({ key: "CallerId", value: caller });
+        if (postal) pairs.push({ key: "InboundZipCode", value: postal });
+        if (sub) pairs.push({ key: "SubPublisherid", value: sub });
+        if (pstn) pairs.push({ key: "pstn", value: pstn });
+      }
       // Reference buyers are called with the query string on the URL.
       // POST transfers use that same URL and an empty body.
       const url = withQuery(ctx.baseUrl, pairs);
@@ -143,6 +156,47 @@ function dig(obj: unknown, path: string[]): unknown {
   }
   return cur;
 }
+
+const CALLGRID_CODES: Record<number, string> = {
+  4001: "Disabled or unknown Grid ID",
+  4002: "Campaign, source, or grid is paused",
+  4003: "Invalid caller ID",
+  4004: "No destinations available",
+  4005: "Duplicate caller",
+  4006: "No phone numbers available",
+  4007: "Caller blocked",
+  4008: "Duplicate bid",
+  4009: "Failed tag rules",
+  4010: "Bid not found",
+  4011: "Bid expired",
+  4012: "Bid does not require confirmation",
+  4013: "All destinations closed",
+  5001: "Rate limit exceeded",
+};
+
+/** CallGrid accepts a bid only when `code` is 1000. Phone bids need `pstn=true`. */
+export const interpretCallGrid: Interpret = (body, httpStatus) => {
+  const b = (body ?? {}) as Record<string, unknown>;
+  const code = typeof b.code === "number" ? b.code : Number(b.code);
+  const accepted = httpStatus < 400 && code === 1000;
+  const bidRaw = b.dynamicBid;
+  const bidNum = typeof bidRaw === "number" ? bidRaw : bidRaw != null && bidRaw !== "" ? Number(bidRaw) : NaN;
+  const phone =
+    (typeof b.dynamicPhoneNumber === "string" && b.dynamicPhoneNumber) ||
+    (typeof b.dynamicSipAddress === "string" && b.dynamicSipAddress) ||
+    null;
+  const message = typeof b.message === "string" ? b.message : "";
+  return {
+    accepted,
+    bid: Number.isFinite(bidNum) ? bidNum : null,
+    trackingNumber: accepted ? phone : null,
+    rejectReason: accepted
+      ? null
+      : message ||
+        (Number.isFinite(code) ? CALLGRID_CODES[code] || `CallGrid code ${code}` : null) ||
+        (httpStatus >= 400 ? `HTTP ${httpStatus}` : "Rejected"),
+  };
+};
 
 /** Callisto returns a bid on `pricing` and the transfer number on `agents[0].phone`. */
 export const interpretCallisto: Interpret = (body, httpStatus) => {

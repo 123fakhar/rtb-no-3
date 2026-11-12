@@ -1,5 +1,5 @@
 import type { ProviderAdapter } from "./types";
-import { createGenericAdapter, defaultInterpret, interpretCallisto } from "./generic";
+import { createGenericAdapter, defaultInterpret, interpretCallisto, interpretCallGrid } from "./generic";
 
 /**
  * One adapter per supported buyer platform. Adding a provider is a single
@@ -52,11 +52,11 @@ export const providers: Record<string, ProviderAdapter> = {
   callgrid: createGenericAdapter({
     key: "callgrid",
     label: "Call Grid",
-    apiKeyParam: "api_key",
     fields: [
-      { key: "apiKey", label: "API Key", secret: true },
-      { key: "sourceId", label: "Source ID" },
+      { key: "sourceId", label: "Grid ID" },
+      { key: "publisherId", label: "SubPublisherid" },
     ],
+    interpret: interpretCallGrid,
   }),
   callisto: createGenericAdapter({
     key: "callisto",
