@@ -3,7 +3,7 @@ import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { asyncHandler, HttpError } from "../lib/http";
-import { requireAdmin, requireAuth, requireSalesAccess } from "../middleware/auth";
+import { isCloserRole, requireAdmin, requireAuth, requireSalesAccess } from "../middleware/auth";
 import { phoneKey, syncLeadSale } from "../services/sale";
 import { workbookFile } from "../services/excel";
 
@@ -713,6 +713,114 @@ crmRouter.get(
       totals,
       agentPerformance: [...agentMap.values()].sort((a, b) => b.total - a.total),
       dailyTrend: [...daysMap.values()],
+    });
+  })
+);
+
+function localParts(date: Date, tzOffsetMin: number) {
+  const local = new Date(date.getTime() - tzOffsetMin * 60 * 1000);
+  return {
+    year: local.getUTCFullYear(),
+    month: local.getUTCMonth(),
+    day: local.getUTCDate(),
+    weekday: local.getUTCDay(),
+  };
+}
+
+function weekKey(parts: { year: number; month: number; day: number; weekday: number }) {
+  const back = parts.weekday === 0 ? 6 : parts.weekday - 1;
+  const monday = new Date(Date.UTC(parts.year, parts.month, parts.day - back));
+  return monday.toISOString().slice(0, 10);
+}
+
+crmRouter.get(
+  "/trends",
+  asyncHandler(async (req, res) => {
+    const tzRaw = Number(req.query.tzOffset);
+    const tzOffsetMin = Number.isFinite(tzRaw) ? tzRaw : 0;
+    const campaignId = typeof req.query.campaignId === "string" && req.query.campaignId ? req.query.campaignId : undefined;
+    const did = typeof req.query.did === "string" && req.query.did ? req.query.did : undefined;
+    const requestedUser = typeof req.query.userId === "string" && req.query.userId ? req.query.userId : undefined;
+    const userId = isCloserRole(req.user!.role) ? req.user!.id : requestedUser;
+
+    const where: Prisma.CrmEntryWhereInput = {
+      pingId: null,
+      kind: "SALE",
+      ...(campaignId ? { campaignId } : {}),
+      ...(did ? { did } : {}),
+      ...(userId ? { OR: [{ agentId: userId }, { closerName: { equals: (await prisma.user.findUnique({ where: { id: userId }, select: { name: true } }))?.name || "__none__", mode: "insensitive" } }] } : {}),
+    };
+
+    const [entries, campaigns, closers, didRows] = await Promise.all([
+      prisma.crmEntry.findMany({
+        where,
+        select: { createdAt: true, status: true },
+      }),
+      prisma.campaign.findMany({ select: { id: true, name: true, active: true }, orderBy: { name: "asc" } }),
+      isCloserRole(req.user!.role)
+        ? Promise.resolve([])
+        : prisma.user.findMany({
+            where: { role: { in: ["CLOSER", "AGENT"] } },
+            select: { id: true, name: true },
+            orderBy: { name: "asc" },
+          }),
+      prisma.crmEntry.findMany({
+        where: { pingId: null, kind: "SALE", did: { not: "" }, ...(userId ? { agentId: userId } : {}) },
+        distinct: ["did"],
+        select: { did: true },
+        take: 200,
+      }),
+    ]);
+
+    const nowParts = localParts(new Date(), tzOffsetMin);
+    const shift = (days: number, months = 0) => {
+      const shifted = new Date(Date.UTC(nowParts.year, nowParts.month + months, nowParts.day + days));
+      return {
+        year: shifted.getUTCFullYear(),
+        month: shifted.getUTCMonth(),
+        day: shifted.getUTCDate(),
+        weekday: shifted.getUTCDay(),
+      };
+    };
+    const dayText = (parts: { year: number; month: number; day: number }) =>
+      `${parts.year}-${String(parts.month + 1).padStart(2, "0")}-${String(parts.day).padStart(2, "0")}`;
+    const todayKey = dayText(nowParts);
+    const thisWeek = weekKey(nowParts);
+    const thisMonth = `${nowParts.year}-${String(nowParts.month + 1).padStart(2, "0")}`;
+
+    const dayMap = new Map<string, number>();
+    const weekMap = new Map<string, number>();
+    const monthMap = new Map<string, number>();
+    for (let i = 13; i >= 0; i -= 1) dayMap.set(dayText(shift(-i)), 0);
+    for (let i = 11; i >= 0; i -= 1) weekMap.set(weekKey(shift(-i * 7)), 0);
+    for (let i = 11; i >= 0; i -= 1) {
+      const parts = shift(0, -i);
+      monthMap.set(`${parts.year}-${String(parts.month + 1).padStart(2, "0")}`, 0);
+    }
+
+    const totals = { day: 0, week: 0, month: 0, all: entries.length };
+    for (const entry of entries) {
+      const parts = localParts(entry.createdAt, tzOffsetMin);
+      const day = dayText(parts);
+      const week = weekKey(parts);
+      const month = `${parts.year}-${String(parts.month + 1).padStart(2, "0")}`;
+      if (dayMap.has(day)) dayMap.set(day, (dayMap.get(day) || 0) + 1);
+      if (weekMap.has(week)) weekMap.set(week, (weekMap.get(week) || 0) + 1);
+      if (monthMap.has(month)) monthMap.set(month, (monthMap.get(month) || 0) + 1);
+      if (day === todayKey) totals.day += 1;
+      if (week === thisWeek) totals.week += 1;
+      if (month === thisMonth) totals.month += 1;
+    }
+
+    const labelDay = (key: string) => key.slice(5);
+    res.json({
+      totals,
+      daily: [...dayMap.entries()].map(([label, sales]) => ({ label: labelDay(label), sales })),
+      weekly: [...weekMap.entries()].map(([label, sales]) => ({ label: label.slice(5), sales })),
+      monthly: [...monthMap.entries()].map(([label, sales]) => ({ label, sales })),
+      campaigns,
+      closers,
+      dids: didRows.map((row) => row.did).filter(Boolean).sort(),
     });
   })
 );

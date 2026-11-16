@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import { apiRequest } from "@/lib/api";
 import { putCache, takeCache } from "@/lib/tabCache";
 import { Loader2 } from "lucide-react";
+import { PerformanceCharts } from "./PerformanceCharts";
 
 interface Performance {
   name: string;
@@ -63,6 +64,12 @@ export function AgentPerformanceView() {
           </div>
         ))}
       </div>
+      <PerformanceCharts
+        embedded
+        showFilters={false}
+        title="Sales"
+        subtitle="Daily, weekly, and monthly sales for every campaign, or one campaign at a time."
+      />
     </div>
   );
 }

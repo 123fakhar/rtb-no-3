@@ -25,6 +25,8 @@ import { AccountView } from "@/components/AccountView";
 import { NoPickupFormView } from "@/components/NoPickupFormView";
 import { NoPickupListView } from "@/components/NoPickupListView";
 import { CloserReportView } from "@/components/CloserReportView";
+import { ManagerCampaignsView } from "@/components/ManagerCampaignsView";
+import { PerformanceCharts } from "@/components/PerformanceCharts";
 import { BrandLogo } from "@/components/BrandLogo";
 import { Loader2, ArrowRight } from "lucide-react";
 
@@ -37,7 +39,7 @@ function defaultTab(role: string | undefined) {
 }
 
 function tabAllowed(tab: string, role: string | undefined) {
-  const shared = ["submit-lead", "my-leads", "submit-crm", "my-crm"];
+  const shared = ["submit-lead", "my-leads", "submit-crm"];
   if (shared.includes(tab)) return true;
   if (role === "ADMIN") {
     return [
@@ -57,8 +59,8 @@ function tabAllowed(tab: string, role: string | undefined) {
       "settings",
     ].includes(tab);
   }
-  if (role === "MANAGER") return ["sales", "sales-stats", "no-pickups", "closers"].includes(tab);
-  return ["my-performance", "my-sales", "submit-no-pickup", "no-pickups", "account"].includes(tab);
+  if (role === "MANAGER") return ["sales", "sales-stats", "performance", "campaigns", "closers"].includes(tab);
+  return ["my-performance", "my-sales"].includes(tab);
 }
 
 function sameUrl() {
@@ -315,7 +317,14 @@ export default function HomePage() {
 
           {isManager && currentTab === "sales" && <CrmListView title="Sales" />}
           {isManager && currentTab === "sales-stats" && <SalesStatsView />}
-          {isManager && currentTab === "no-pickups" && <NoPickupListView />}
+          {isManager && currentTab === "performance" && (
+            <PerformanceCharts
+              showFilters
+              title="Campaign performance"
+              subtitle="Filter by campaign, closer, or DID. Each chart is daily, weekly, or monthly sales."
+            />
+          )}
+          {isManager && currentTab === "campaigns" && <ManagerCampaignsView />}
           {isManager && currentTab === "closers" && <ClosersView />}
 
           {/* Agent Views */}
@@ -336,7 +345,7 @@ export default function HomePage() {
           {currentTab === "submit-crm" && (
             <CrmFormView
               onSuccess={() => {
-                goToTab(isAdmin ? "crm" : isManager ? "sales" : "my-crm");
+                goToTab(isAdmin ? "crm" : isManager ? "sales" : "my-sales");
               }}
             />
           )}

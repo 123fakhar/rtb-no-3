@@ -61,6 +61,7 @@ model User {
   leads        Lead[]
   crmEntries   CrmEntry[]
   apiLogs      ApiLog[]
+  campaignMembers CampaignMember[]
 
   @@index([role])
 }
@@ -78,6 +79,20 @@ model Campaign {
   configs     RtbConfig[]
   leads       Lead[]
   crmEntries  CrmEntry[]
+  members     CampaignMember[]
+}
+
+model CampaignMember {
+  id         String   @id @default(cuid())
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  @@unique([campaignId, userId])
+  @@index([userId])
 }
 
 model Buyer {

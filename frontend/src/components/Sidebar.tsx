@@ -54,16 +54,13 @@ export function Sidebar({ currentTab, onTabChange }: SidebarProps) {
     { id: "my-leads", label: "My Leads", icon: Send },
     { id: "my-sales", label: "My Sales", icon: PieChart },
     { id: "submit-crm", label: "Submit CRM", icon: FilePlus },
-    { id: "my-crm", label: "CRM Entries", icon: ClipboardList },
-    { id: "submit-no-pickup", label: "No Pickup", icon: PhoneOff },
-    { id: "no-pickups", label: "No Pickups", icon: ClipboardList },
-    { id: "account", label: "My Account", icon: Settings },
   ];
 
   const managerNav = [
     { id: "sales", label: "Sales", icon: ClipboardList },
     { id: "sales-stats", label: "Sales Stats", icon: PieChart },
-    { id: "no-pickups", label: "No Pickups", icon: PhoneOff },
+    { id: "performance", label: "Performance", icon: BarChart3 },
+    { id: "campaigns", label: "Campaigns", icon: Target },
     { id: "closers", label: "Closers", icon: Users },
   ];
 

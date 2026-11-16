@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../lib/http";
-import { requireAdmin, requireAuth } from "../middleware/auth";
+import { requireAdmin, requireAuth, requireSalesAccess } from "../middleware/auth";
 
 export const campaignsRouter = Router();
 
@@ -29,7 +29,7 @@ campaignsRouter.get(
 
 campaignsRouter.post(
   "/",
-  requireAdmin,
+  requireSalesAccess,
   asyncHandler(async (req, res) => {
     const data = writeSchema.parse(req.body);
     const campaign = await prisma.campaign.create({ data });
@@ -39,7 +39,7 @@ campaignsRouter.post(
 
 campaignsRouter.patch(
   "/:id",
-  requireAdmin,
+  requireSalesAccess,
   asyncHandler(async (req, res) => {
     const data = writeSchema.partial().parse(req.body);
     const campaign = await prisma.campaign.update({ where: { id: req.params.id }, data });
@@ -53,5 +53,45 @@ campaignsRouter.delete(
   asyncHandler(async (req, res) => {
     await prisma.campaign.delete({ where: { id: req.params.id } });
     res.status(204).end();
+  })
+);
+
+campaignsRouter.get(
+  "/:id/members",
+  requireSalesAccess,
+  asyncHandler(async (req, res) => {
+    const closers = await prisma.user.findMany({
+      where: { role: { in: ["CLOSER", "AGENT"] } },
+      select: { id: true, name: true, email: true, active: true },
+      orderBy: { name: "asc" },
+    });
+    const members = await prisma.campaignMember.findMany({
+      where: { campaignId: req.params.id },
+      select: { userId: true, active: true },
+    });
+    const byUser = new Map(members.map((member) => [member.userId, member.active]));
+    res.json({
+      members: closers.map((closer) => ({
+        ...closer,
+        inCampaign: byUser.has(closer.id),
+        active: byUser.get(closer.id) === true,
+      })),
+    });
+  })
+);
+
+const memberSchema = z.object({ active: z.boolean() });
+
+campaignsRouter.put(
+  "/:id/members/:userId",
+  requireSalesAccess,
+  asyncHandler(async (req, res) => {
+    const { active } = memberSchema.parse(req.body);
+    const member = await prisma.campaignMember.upsert({
+      where: { campaignId_userId: { campaignId: req.params.id, userId: req.params.userId } },
+      update: { active },
+      create: { campaignId: req.params.id, userId: req.params.userId, active },
+    });
+    res.json({ member });
   })
 );
