@@ -9,6 +9,7 @@ interface Campaign {
   name: string;
   vertical: string;
   active: boolean;
+  children?: { id: string; name: string }[];
 }
 
 interface Member {
@@ -27,10 +28,13 @@ export function ManagerCampaignsView() {
   const [savingId, setSavingId] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [vertical, setVertical] = useState("");
+  const [closerName, setCloserName] = useState("");
+  const [closerEmail, setCloserEmail] = useState("");
+  const [closerPassword, setCloserPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const loadCampaigns = async () => {
-    const res = await apiRequest<{ campaigns: Campaign[] }>("/api/campaigns");
+      const res = await apiRequest<{ campaigns: Campaign[] }>("/api/campaigns?scope=team");
     setCampaigns(res.campaigns);
     setSelectedId((current) => current || res.campaigns.find((item) => item.name === "Auto Insurance")?.id || res.campaigns[0]?.id || "");
   };
@@ -54,7 +58,7 @@ export function ManagerCampaignsView() {
     try {
       await apiRequest("/api/campaigns", {
         method: "POST",
-        body: JSON.stringify({ name: name.trim(), vertical: vertical.trim() || name.trim(), active: true }),
+        body: JSON.stringify({ name: name.trim(), vertical: vertical.trim() || name.trim(), active: true, team: true }),
       });
       setName("");
       setVertical("");
@@ -81,7 +85,33 @@ export function ManagerCampaignsView() {
     }
   };
 
+  const createCloser = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setError(null);
+    try {
+      await apiRequest("/api/users/closers", {
+        method: "POST",
+        body: JSON.stringify({
+          name: closerName.trim(),
+          email: closerEmail.trim(),
+          password: closerPassword,
+          campaignId: selectedId || undefined,
+        }),
+      });
+      setCloserName("");
+      setCloserEmail("");
+      setCloserPassword("");
+      if (selectedId) {
+        const res = await apiRequest<{ members: Member[] }>(`/api/campaigns/${selectedId}/members`);
+        setMembers(res.members);
+      }
+    } catch (err: any) {
+      setError(err.message || "Could not create closer");
+    }
+  };
+
   const activeCount = members.filter((member) => member.active).length;
+  const selected = campaigns.find((campaign) => campaign.id === selectedId);
 
   return (
     <div className="p-6 md:p-10 max-w-6xl mx-auto space-y-6">
@@ -95,6 +125,12 @@ export function ManagerCampaignsView() {
         <input value={vertical} onChange={(event) => setVertical(event.target.value)} placeholder="Vertical" className="flex-1 px-3 py-2 rounded-xl border border-slate-200 text-xs" />
         <button className="btn-primary px-4 py-2 text-xs font-bold rounded-xl">Create campaign</button>
       </form>
+      <form onSubmit={createCloser} className="kukie-card-static p-4 grid grid-cols-1 md:grid-cols-4 gap-2">
+        <input value={closerName} onChange={(event) => setCloserName(event.target.value)} placeholder="New closer name" className="px-3 py-2 rounded-xl border border-slate-200 text-xs" required />
+        <input value={closerEmail} onChange={(event) => setCloserEmail(event.target.value)} placeholder="Email" type="email" className="px-3 py-2 rounded-xl border border-slate-200 text-xs" required />
+        <input value={closerPassword} onChange={(event) => setCloserPassword(event.target.value)} placeholder="Password (8+ characters)" type="password" className="px-3 py-2 rounded-xl border border-slate-200 text-xs" required minLength={8} />
+        <button className="btn-primary px-4 py-2 text-xs font-bold rounded-xl">Create closer in this campaign</button>
+      </form>
       {loading ? (
         <div className="p-12 flex justify-center"><Loader2 className="w-6 h-6 animate-spin" /></div>
       ) : (
@@ -107,11 +143,17 @@ export function ManagerCampaignsView() {
                 className={`w-full text-left px-3 py-2 rounded-xl text-xs font-semibold ${selectedId === campaign.id ? "bg-slate-900 text-white" : "bg-white border border-slate-200 text-slate-700"}`}
               >
                 {campaign.name}
+                {campaign.children && campaign.children.length > 0 && (
+                  <span className="block text-[10px] font-medium opacity-70 mt-1">{campaign.children.map((child) => child.name).join(", ")}</span>
+                )}
               </button>
             ))}
           </div>
           <div className="kukie-card-static overflow-hidden">
-            <div className="px-4 py-3 text-xs text-slate-500 border-b border-slate-100">{activeCount} active closers in this campaign</div>
+            <div className="px-4 py-3 text-xs text-slate-500 border-b border-slate-100">
+              {activeCount} active closers in {selected?.name || "this campaign"}
+              {selected?.children && selected.children.length > 0 ? ` · ${selected.children.map((child) => child.name).join(", ")}` : ""}
+            </div>
             <table className="w-full text-left text-xs">
               <thead>
                 <tr className="bg-slate-50 text-[11px] font-extrabold uppercase tracking-wider text-slate-500">

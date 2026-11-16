@@ -30,6 +30,20 @@ interface SidebarProps {
 
 export function Sidebar({ currentTab, onTabChange }: SidebarProps) {
   const { user, isAdmin, isManager, logout } = useAuth();
+  const [dark, setDark] = React.useState(false);
+
+  React.useEffect(() => {
+    const saved = window.localStorage.getItem("manager-theme") === "dark";
+    setDark(saved);
+    document.documentElement.classList.toggle("manager-dark", isManager && saved);
+  }, [isManager]);
+
+  const toggleTheme = () => {
+    const next = !dark;
+    setDark(next);
+    window.localStorage.setItem("manager-theme", next ? "dark" : "light");
+    document.documentElement.classList.toggle("manager-dark", next);
+  };
 
   const adminNav = [
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -54,12 +68,13 @@ export function Sidebar({ currentTab, onTabChange }: SidebarProps) {
     { id: "my-leads", label: "My Leads", icon: Send },
     { id: "my-sales", label: "My Sales", icon: PieChart },
     { id: "submit-crm", label: "Submit CRM", icon: FilePlus },
+    { id: "submit-no-pickup", label: "No Pickup", icon: PhoneOff },
   ];
 
   const managerNav = [
+    { id: "performance", label: "Performance", icon: BarChart3 },
     { id: "sales", label: "Sales", icon: ClipboardList },
     { id: "sales-stats", label: "Sales Stats", icon: PieChart },
-    { id: "performance", label: "Performance", icon: BarChart3 },
     { id: "campaigns", label: "Campaigns", icon: Target },
     { id: "closers", label: "Closers", icon: Users },
   ];
@@ -131,6 +146,14 @@ export function Sidebar({ currentTab, onTabChange }: SidebarProps) {
             <LogOut className="w-4 h-4" />
           </button>
         </div>
+        {isManager && (
+          <button
+            onClick={toggleTheme}
+            className="mt-3 w-full rounded-xl border border-white/15 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-white/10"
+          >
+            {dark ? "Bright mode" : "Dark mode"}
+          </button>
+        )}
       </div>
     </aside>
   );

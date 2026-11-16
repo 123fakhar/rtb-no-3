@@ -4,6 +4,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { asyncHandler, HttpError } from "../lib/http";
 import { isCloserRole, requireAdmin, requireAuth, requireSalesAccess } from "../middleware/auth";
+import { periodStart, shiftParts } from "../lib/pkt";
 import { phoneKey, syncLeadSale } from "../services/sale";
 import { workbookFile } from "../services/excel";
 
@@ -291,18 +292,8 @@ crmRouter.patch(
  * Performance analytics of each agent, breakdown of submissions (pending, approved, rejected),
  * daily trend, and campaign distribution.
  */
-function rangeStart(range: string, tzOffsetMin: number) {
-  const now = new Date();
-  const local = new Date(now.getTime() - tzOffsetMin * 60 * 1000);
-  const dayStart = new Date(Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate()));
-  if (range === "month") {
-    dayStart.setUTCDate(1);
-  } else if (range === "week") {
-    const weekday = local.getUTCDay();
-    const back = weekday === 0 ? 6 : weekday - 1;
-    dayStart.setUTCDate(dayStart.getUTCDate() - back);
-  }
-  return new Date(dayStart.getTime() + tzOffsetMin * 60 * 1000);
+function rangeStart(range: string, _tzOffsetMin: number) {
+  return periodStart(range === "week" || range === "month" ? range : "day");
 }
 
 crmRouter.get(
@@ -358,9 +349,26 @@ crmRouter.get(
     }
 
     const byTotal = <T extends { total: number }>(rows: T[]) => rows.sort((a, b) => b.total - a.total);
+    let pending = 0;
+    let approved = 0;
+    let rejected = 0;
+    for (const entry of entries) {
+      if (entry.status === "PENDING") pending += 1;
+      else if (entry.status === "APPROVED") approved += 1;
+      else if (entry.status === "REJECTED") rejected += 1;
+    }
+    const leads = entries.length;
     res.json({
       agents: byTotal([...agents.values()]),
       closers: byTotal([...closers.values()]),
+      summary: {
+        leads,
+        sold: approved,
+        conversion: leads > 0 ? Math.round((approved / leads) * 1000) / 10 : 0,
+        pending,
+        approved,
+        rejected,
+      },
     });
   })
 );
@@ -717,14 +725,8 @@ crmRouter.get(
   })
 );
 
-function localParts(date: Date, tzOffsetMin: number) {
-  const local = new Date(date.getTime() - tzOffsetMin * 60 * 1000);
-  return {
-    year: local.getUTCFullYear(),
-    month: local.getUTCMonth(),
-    day: local.getUTCDate(),
-    weekday: local.getUTCDay(),
-  };
+function localParts(date: Date, _tzOffsetMin: number) {
+  return shiftParts(date);
 }
 
 function weekKey(parts: { year: number; month: number; day: number; weekday: number }) {
@@ -746,17 +748,20 @@ crmRouter.get(
     const where: Prisma.CrmEntryWhereInput = {
       pingId: null,
       kind: "SALE",
-      ...(campaignId ? { campaignId } : {}),
       ...(did ? { did } : {}),
       ...(userId ? { OR: [{ agentId: userId }, { closerName: { equals: (await prisma.user.findUnique({ where: { id: userId }, select: { name: true } }))?.name || "__none__", mode: "insensitive" } }] } : {}),
     };
+    if (campaignId) {
+      const children = await prisma.campaign.findMany({ where: { parentId: campaignId }, select: { id: true } });
+      where.campaignId = { in: [campaignId, ...children.map((child) => child.id)] };
+    }
 
-    const [entries, campaigns, closers, didRows] = await Promise.all([
+    const [entries, campaignRows, closers, didRows] = await Promise.all([
       prisma.crmEntry.findMany({
         where,
         select: { createdAt: true, status: true },
       }),
-      prisma.campaign.findMany({ select: { id: true, name: true, active: true }, orderBy: { name: "asc" } }),
+      prisma.campaign.findMany({ select: { id: true, name: true, team: true, parentId: true }, orderBy: { name: "asc" } }),
       isCloserRole(req.user!.role)
         ? Promise.resolve([])
         : prisma.user.findMany({
@@ -813,12 +818,21 @@ crmRouter.get(
     }
 
     const labelDay = (key: string) => key.slice(5);
+    const teams = campaignRows.filter((campaign) => campaign.team);
+    const campaignOptions = teams.length
+      ? teams.flatMap((team) => [
+          { id: team.id, name: team.name },
+          ...campaignRows
+            .filter((campaign) => campaign.parentId === team.id)
+            .map((campaign) => ({ id: campaign.id, name: `${team.name} · ${campaign.name}` })),
+        ])
+      : campaignRows.map((campaign) => ({ id: campaign.id, name: campaign.name }));
     res.json({
       totals,
       daily: [...dayMap.entries()].map(([label, sales]) => ({ label: labelDay(label), sales })),
       weekly: [...weekMap.entries()].map(([label, sales]) => ({ label: label.slice(5), sales })),
       monthly: [...monthMap.entries()].map(([label, sales]) => ({ label, sales })),
-      campaigns,
+      campaigns: campaignOptions,
       closers,
       dids: didRows.map((row) => row.did).filter(Boolean).sort(),
     });

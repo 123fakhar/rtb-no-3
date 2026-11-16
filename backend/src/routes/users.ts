@@ -23,6 +23,34 @@ usersRouter.get(
   })
 );
 
+const closerSchema = z.object({
+  name: z.string().min(1).max(120),
+  email: z.string().email(),
+  password: z.string().min(8).max(200),
+  campaignId: z.string().min(1).optional(),
+});
+
+usersRouter.post(
+  "/closers",
+  requireSalesAccess,
+  asyncHandler(async (req, res) => {
+    const data = closerSchema.parse(req.body);
+    const passwordHash = await bcrypt.hash(data.password, config.bcryptRounds);
+    const user = await prisma.user.create({
+      data: { name: data.name.trim(), email: data.email.toLowerCase(), passwordHash, role: "CLOSER" },
+      select: userSelect,
+    });
+    if (data.campaignId) {
+      await prisma.campaignMember.upsert({
+        where: { campaignId_userId: { campaignId: data.campaignId, userId: user.id } },
+        update: { active: true },
+        create: { campaignId: data.campaignId, userId: user.id, active: true },
+      });
+    }
+    res.status(201).json({ user });
+  })
+);
+
 usersRouter.use(requireAdmin);
 
 const userSelect = { id: true, name: true, email: true, role: true, active: true, createdAt: true } as const;

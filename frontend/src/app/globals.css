@@ -93,3 +93,49 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
 }
+
+html.manager-dark,
+html.manager-dark body {
+  background: #0b1220;
+  color: #e5e7eb;
+}
+
+html.manager-dark .kukie-bg,
+html.manager-dark main {
+  background: #0b1220 !important;
+}
+
+html.manager-dark .kukie-card,
+html.manager-dark .kukie-card-static,
+html.manager-dark .bg-white {
+  background-color: #152033 !important;
+  border-color: #243049 !important;
+  color: #e5e7eb;
+}
+
+html.manager-dark .text-slate-900,
+html.manager-dark .text-slate-800,
+html.manager-dark .text-slate-700 {
+  color: #f8fafc !important;
+}
+
+html.manager-dark .text-slate-600,
+html.manager-dark .text-slate-500,
+html.manager-dark .text-slate-400 {
+  color: #94a3b8 !important;
+}
+
+html.manager-dark input,
+html.manager-dark select,
+html.manager-dark textarea {
+  background: #0f172a !important;
+  color: #e5e7eb !important;
+  border-color: #334155 !important;
+}
+
+html.manager-dark table,
+html.manager-dark th,
+html.manager-dark td {
+  border-color: #243049;
+}
+

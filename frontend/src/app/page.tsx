@@ -34,7 +34,7 @@ type AppView = { tab: string; leadId: string | null };
 
 function defaultTab(role: string | undefined) {
   if (role === "CLOSER" || role === "AGENT") return "submit-lead";
-  if (role === "MANAGER") return "sales";
+  if (role === "MANAGER") return "performance";
   return "dashboard";
 }
 
@@ -60,7 +60,7 @@ function tabAllowed(tab: string, role: string | undefined) {
     ].includes(tab);
   }
   if (role === "MANAGER") return ["sales", "sales-stats", "performance", "campaigns", "closers"].includes(tab);
-  return ["my-performance", "my-sales"].includes(tab);
+  return ["my-performance", "my-sales", "submit-no-pickup"].includes(tab);
 }
 
 function sameUrl() {
@@ -356,12 +356,7 @@ export default function HomePage() {
             />
           )}
           {!isAdmin && !isManager && currentTab === "my-sales" && <CloserReportView />}
-          {!isAdmin && !isManager && currentTab === "submit-no-pickup" && (
-            <NoPickupFormView onSuccess={() => goToTab("no-pickups")} />
-          )}
-          {!isAdmin && !isManager && currentTab === "no-pickups" && (
-            <NoPickupListView onNew={() => goToTab("submit-no-pickup")} />
-          )}
+          {!isAdmin && !isManager && currentTab === "submit-no-pickup" && <NoPickupFormView />}
           {!isAdmin && !isManager && currentTab === "my-performance" && <AgentPerformanceView />}
           {!isAdmin && !isManager && currentTab === "account" && <AccountView />}
         </div>

@@ -53,7 +53,7 @@ export function PerformanceCharts({
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
           {!embedded && <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-slate-900">{title}</h1>}
-          <p className="text-xs text-slate-500 mt-1">{subtitle}</p>
+          <p className="text-xs text-slate-500 mt-1">{subtitle} Days run from 6:00 PM to 6:00 PM Pakistan time.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <select value={campaignId} onChange={(event) => setCampaignId(event.target.value)} className="px-3 py-2 rounded-xl border border-slate-200 text-xs bg-white">

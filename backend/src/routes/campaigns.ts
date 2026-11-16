@@ -14,11 +14,24 @@ const writeSchema = z.object({
   description: z.string().max(2000).optional(),
   active: z.boolean().optional(),
   defaults: z.record(z.string()).optional(),
+  team: z.boolean().optional(),
 });
 
 campaignsRouter.get(
   "/",
-  asyncHandler(async (_req, res) => {
+  asyncHandler(async (req, res) => {
+    if (req.query.scope === "team") {
+      const campaigns = await prisma.campaign.findMany({
+        where: { team: true },
+        orderBy: { name: "asc" },
+        include: {
+          children: { select: { id: true, name: true }, orderBy: { name: "asc" } },
+          _count: { select: { members: true } },
+        },
+      });
+      res.json({ campaigns });
+      return;
+    }
     const campaigns = await prisma.campaign.findMany({
       orderBy: { name: "asc" },
       include: { _count: { select: { configs: true, leads: true } } },

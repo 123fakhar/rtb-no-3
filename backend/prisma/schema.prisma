@@ -73,6 +73,10 @@ model Campaign {
   description String   @default("")
   active      Boolean  @default(true)
   defaults    Json     @default("{}")
+  team        Boolean  @default(false)
+  parentId    String?
+  parent      Campaign?  @relation("CampaignTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children    Campaign[] @relation("CampaignTree")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

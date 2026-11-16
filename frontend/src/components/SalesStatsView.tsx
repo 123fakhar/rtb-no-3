@@ -15,6 +15,15 @@ interface SalesRow {
   total: number;
 }
 
+interface SalesSummary {
+  leads: number;
+  sold: number;
+  conversion: number;
+  pending: number;
+  approved: number;
+  rejected: number;
+}
+
 type Range = "all" | "day" | "week" | "month";
 
 const rangeLabel: Record<Range, string> = {
@@ -34,6 +43,7 @@ export function SalesStatsView() {
     () => takeCache("sales-agents:all") == null && takeCache("sales-closers:all") == null
   );
   const [error, setError] = useState<string | null>(null);
+  const [summary, setSummary] = useState<SalesSummary | null>(null);
   const [downloading, setDownloading] = useState<string | null>(null);
 
   useEffect(() => {
@@ -44,12 +54,13 @@ export function SalesStatsView() {
       if (cachedClosers) setClosers(cachedClosers);
       setLoading(false);
     } else setLoading(true);
-    apiRequest<{ agents: SalesRow[]; closers: SalesRow[] }>(
+    apiRequest<{ agents: SalesRow[]; closers: SalesRow[]; summary?: SalesSummary }>(
       `/api/crm/sales-stats?range=${range}&tzOffset=${new Date().getTimezoneOffset()}`
     )
       .then((res) => {
         setAgents(res.agents);
         setClosers(res.closers);
+        setSummary(res.summary ?? null);
         putCache(`sales-agents:${range}`, res.agents);
         putCache(`sales-closers:${range}`, res.closers);
         setError(null);
@@ -87,7 +98,7 @@ export function SalesStatsView() {
         <div>
           <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-slate-900">Sales</h1>
           <p className="text-xs text-slate-500 mt-1">
-            Agent names from the CRM form are counted separately from the closer who submitted the sale. The Excel file is created from the latest rows in the selected period.
+            Counts use Pakistan time. A day starts at 6:00 PM and runs until 6:00 PM the next day.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -113,6 +124,23 @@ export function SalesStatsView() {
         </div>
       </div>
       {error && <div className="p-3 rounded-2xl bg-rose-50 text-rose-700 text-xs">{error}</div>}
+      {summary && (
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+          {[
+            { label: "Leads", value: String(summary.leads) },
+            { label: "Sold", value: String(summary.sold) },
+            { label: "Conversion", value: `${summary.conversion}%` },
+            { label: "CRM pending", value: String(summary.pending) },
+            { label: "CRM approved", value: String(summary.approved) },
+            { label: "CRM rejected", value: String(summary.rejected) },
+          ].map((card) => (
+            <div key={card.label} className="kukie-card-static p-4">
+              <div className="text-xs text-slate-500">{card.label}</div>
+              <div className="mt-1 text-xl font-bold text-slate-900 font-mono">{card.value}</div>
+            </div>
+          ))}
+        </div>
+      )}
       <StatsTable title="Agents" hint="The agent name typed on the CRM form." rows={agents} />
       <StatsTable title="Closers" hint="The name the closer typed on the CRM form." rows={closers} showEmail />
     </div>
