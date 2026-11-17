@@ -98,7 +98,7 @@ export function SalesStatsView() {
         <div>
           <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-slate-900">Sales</h1>
           <p className="text-xs text-slate-500 mt-1">
-            Counts use Pakistan time. A day starts at 6:00 PM and runs until 6:00 PM the next day.
+            Accepted sheet rows are CRM approved. No-pickup rows are CRM rejected. Leads also include every lead a closer submits. Days run from 6:00 PM to 6:00 PM Pakistan time.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -141,8 +141,8 @@ export function SalesStatsView() {
           ))}
         </div>
       )}
-      <StatsTable title="Agents" hint="The agent name typed on the CRM form." rows={agents} />
-      <StatsTable title="Closers" hint="The name the closer typed on the CRM form." rows={closers} showEmail />
+      <StatsTable title="Agents" hint="Agents named on a sheet in the past two weeks. The counts are their full history." rows={agents} />
+      <StatsTable title="Closers" hint="Closers named on a sheet in the past two weeks. The counts are their full history." rows={closers} showEmail />
     </div>
   );
 }

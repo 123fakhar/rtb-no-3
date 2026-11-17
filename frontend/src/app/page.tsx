@@ -59,7 +59,7 @@ function tabAllowed(tab: string, role: string | undefined) {
       "settings",
     ].includes(tab);
   }
-  if (role === "MANAGER") return ["sales", "sales-stats", "performance", "campaigns", "closers"].includes(tab);
+  if (role === "MANAGER") return ["leads", "sales", "sales-stats", "performance", "campaigns", "closers"].includes(tab);
   return ["my-performance", "my-sales", "submit-no-pickup"].includes(tab);
 }
 
@@ -292,6 +292,13 @@ export default function HomePage() {
           {isAdmin && currentTab === "campaigns" && <CampaignsView />}
           {isAdmin && currentTab === "buyers" && <BuyersView />}
           {isAdmin && currentTab === "leads" && (
+            <LeadsView
+              title="Leads"
+              onSelectLead={openRoutingLead}
+              onNewLeadClick={() => goToTab("submit-lead")}
+            />
+          )}
+          {isManager && currentTab === "leads" && (
             <LeadsView
               title="Leads"
               onSelectLead={openRoutingLead}

@@ -146,7 +146,7 @@ async function main() {
     await prisma.crmEntry.createMany({ data: batch.slice(i, i + 200) });
   }
 
-  const closers = await prisma.user.findMany({
+  const closers = process.env.SKIP_MEMBERS ? [] : await prisma.user.findMany({
     where: { role: { in: ["CLOSER", "AGENT"] }, active: true },
     orderBy: { name: "asc" },
     select: { id: true },

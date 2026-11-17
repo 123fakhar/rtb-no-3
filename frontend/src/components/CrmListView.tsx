@@ -203,7 +203,7 @@ export function CrmListView({
               ) : (
                 entries.map((entry) => {
                   const isPending = entry.status === "PENDING";
-                  const isApproved = entry.status === "APPROVED";
+                  const isSold = entry.status === "SOLD" || entry.status === "APPROVED";
                   const isRejected = entry.status === "REJECTED";
                   const isActionLoading = actionLoadingId === entry.id;
 
@@ -272,10 +272,10 @@ export function CrmListView({
                             <span>Pending</span>
                           </span>
                         )}
-                        {isApproved && (
+                        {isSold && (
                           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/70">
                             <CheckCircle2 className="w-3 h-3" />
-                            <span>Approved</span>
+                            <span>{entry.status === "SOLD" ? "Sold" : "Approved"}</span>
                           </span>
                         )}
                         {isRejected && (
@@ -315,13 +315,13 @@ export function CrmListView({
                                 onClick={() =>
                                   handleReview(
                                     entry.id,
-                                    isApproved ? "REJECTED" : "APPROVED"
+                                    isSold ? "REJECTED" : "APPROVED"
                                   )
                                 }
                                 disabled={isActionLoading}
                                 className="text-xs font-semibold text-slate-500 hover:text-blue-600 underline"
                               >
-                                Change to {isApproved ? "Rejected" : "Approved"}
+                                Change to {entry.status === "APPROVED" ? "Rejected" : "Approved"}
                               </button>
                             )}
                           </div>

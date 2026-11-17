@@ -50,7 +50,7 @@ export function CloserReportView() {
 
   const cards = [
     { label: "Pending", value: report?.pending ?? 0 },
-    { label: "Accepted", value: report?.approved ?? 0 },
+            { label: "Approved", value: report?.approved ?? 0 },
     { label: "Rejected", value: report?.rejected ?? 0 },
     { label: "Total", value: report?.total ?? 0 },
   ];
@@ -60,7 +60,7 @@ export function CloserReportView() {
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-slate-900">My Sales</h1>
-          <p className="text-xs text-slate-500 mt-1">Your CRM sales for the selected period. This updates as new sales are submitted and reviewed.</p>
+          <p className="text-xs text-slate-500 mt-1">Your sales for the selected period. A day runs from 6:00 PM to 6:00 PM Pakistan time.</p>
         </div>
         <div className="flex gap-2">
           {(Object.keys(labels) as Range[]).map((item) => (
@@ -111,7 +111,7 @@ export function CloserReportView() {
                     <td className="px-4 py-3">{entry.agentName}</td>
                     <td className="px-4 py-3">{entry.buyer}</td>
                     <td className="px-4 py-3">{entry.campaign}</td>
-                    <td className="px-4 py-3">{entry.status === "APPROVED" ? "Accepted" : entry.status === "REJECTED" ? "Rejected" : "Pending"}</td>
+                    <td className="px-4 py-3">{entry.status === "APPROVED" ? "Approved" : entry.status === "REJECTED" ? "Rejected" : "Pending"}</td>
                   </tr>
                 ))}
               </tbody>

@@ -1,4 +1,5 @@
 import { prisma } from "../lib/prisma";
+import { crmReviewWhere, portalStatsWhere, recordBelongsTo } from "../lib/records";
 
 export interface DashboardQuery {
   from: Date;
@@ -518,15 +519,29 @@ export async function performanceForUser(userId: string) {
   });
   if (!user) return null;
 
-  const [leads, sold, revenueAgg, crmGroups] = await Promise.all([
+  const [entries, submittedLeads, revenueAgg] = await Promise.all([
+    prisma.crmEntry.findMany({
+      where: portalStatsWhere(null),
+      select: { agentId: true, closerName: true, fronterName: true, status: true, pingId: true, buyerId: true },
+    }),
     prisma.lead.count({ where: { agentId: userId } }),
-    prisma.lead.count({ where: { agentId: userId, status: "SOLD" } }),
     prisma.lead.aggregate({ where: { agentId: userId }, _sum: { revenue: true } }),
-    prisma.crmEntry.groupBy({ by: ["status"], where: { agentId: userId, pingId: null, kind: "SALE" }, _count: true }),
   ]);
-
+  const mine = entries.filter((entry) => recordBelongsTo(entry, user));
   const crm = { PENDING: 0, APPROVED: 0, REJECTED: 0 };
-  for (const row of crmGroups) crm[row.status] = row._count;
+  let sold = 0;
+  for (const entry of mine) {
+    if (entry.pingId == null && entry.buyerId == null && entry.status === "APPROVED") {
+      crm.APPROVED += 1;
+      sold += 1;
+    } else if (entry.status === "PENDING") crm.PENDING += 1;
+    else if (entry.status === "REJECTED") crm.REJECTED += 1;
+    else if (entry.status === "APPROVED") {
+      crm.APPROVED += 1;
+      sold += 1;
+    }
+  }
+  const leads = mine.length + submittedLeads;
   const revenue = Number(revenueAgg._sum.revenue ?? 0);
 
   return {
@@ -549,7 +564,7 @@ export async function agentPerformance() {
     prisma.lead.groupBy({ by: ["agentId"], _count: true }),
     prisma.lead.groupBy({ by: ["agentId"], where: { status: "SOLD" }, _count: true }),
     prisma.lead.groupBy({ by: ["agentId"], _sum: { revenue: true } }),
-    prisma.crmEntry.groupBy({ by: ["agentId", "status"], where: { pingId: null, kind: "SALE" }, _count: true }),
+    prisma.crmEntry.groupBy({ by: ["agentId", "status"], where: crmReviewWhere, _count: true }),
   ]);
 
   const countOf = (rows: { agentId: string; _count: number }[]) => new Map(rows.map((r) => [r.agentId, r._count]));

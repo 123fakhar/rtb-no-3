@@ -73,6 +73,7 @@ export function Sidebar({ currentTab, onTabChange }: SidebarProps) {
 
   const managerNav = [
     { id: "performance", label: "Performance", icon: BarChart3 },
+    { id: "leads", label: "Leads", icon: Send },
     { id: "sales", label: "Sales", icon: ClipboardList },
     { id: "sales-stats", label: "Sales Stats", icon: PieChart },
     { id: "campaigns", label: "Campaigns", icon: Target },

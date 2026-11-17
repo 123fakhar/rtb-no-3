@@ -4,7 +4,8 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { asyncHandler, HttpError } from "../lib/http";
 import { isCloserRole, requireAdmin, requireAuth, requireSalesAccess } from "../middleware/auth";
-import { periodStart, shiftParts } from "../lib/pkt";
+import { periodStart, shiftKey, shiftParts } from "../lib/pkt";
+import { entryWhen, isSalesBook, personKey, portalStatsWhere, recordedSaleWhere, rosterFromHistory } from "../lib/records";
 import { phoneKey, syncLeadSale } from "../services/sale";
 import { workbookFile } from "../services/excel";
 
@@ -70,7 +71,7 @@ function formatCrmEntry(entry: any, isAdmin: boolean) {
     buyerId: entry.buyerId ?? null,
     buyerName: entry.buyer?.name ?? "—",
     comment: entry.comment,
-    status: entry.status, // PENDING (yellow), APPROVED (green), REJECTED (red)
+    status: entry.status,
     agentId: entry.agentId,
     agentName: entry.closerName?.trim() || entry.agent?.name || "Closer",
     agentEmail: entry.agent?.email ?? "",
@@ -103,8 +104,11 @@ crmRouter.get(
     const agentFilter = !seeAll && req.query.all !== "true" ? req.user!.id : agentId;
 
     const where: Prisma.CrmEntryWhereInput = {
-      pingId: null,
-      kind: "SALE",
+      OR: [
+        { kind: "SALE", pingId: null },
+        { kind: "SALE", pingId: { not: "sheet-import" } },
+        { pingId: "sheet-import", status: "REJECTED" },
+      ],
       ...(agentFilter ? { agentId: agentFilter } : {}),
       ...(campaignId ? { campaignId } : {}),
       ...(status && ["PENDING", "APPROVED", "REJECTED"].includes(status)
@@ -304,67 +308,51 @@ crmRouter.get(
     const tzRaw = Number(_req.query.tzOffset);
     const tzOffsetMin = Number.isFinite(tzRaw) ? tzRaw : 0;
     const from = range === "day" || range === "week" || range === "month" ? rangeStart(range, tzOffsetMin) : null;
-    const entries = await prisma.crmEntry.findMany({
-      where: { pingId: null, kind: "SALE", ...(from ? { createdAt: { gte: from } } : {}) },
-      orderBy: { createdAt: "asc" },
+    const allEntries = await prisma.crmEntry.findMany({
+      where: portalStatsWhere(null),
       select: {
         fronterName: true,
         closerName: true,
         status: true,
+        buyerId: true,
+        pingId: true,
+        createdAt: true,
+        reportedAt: true,
         agentId: true,
-        agent: { select: { name: true, email: true } },
       },
     });
-
-    const agents = new Map<string, { name: string; pending: number; approved: number; rejected: number; total: number }>();
-    const closers = new Map<string, { name: string; email: string; pending: number; approved: number; rejected: number; total: number }>();
-
-    for (const entry of entries) {
-      const agentName = entry.fronterName.trim() || "Unknown agent";
-      const agentKey = agentName.toLowerCase();
-      const agent = agents.get(agentKey) ?? { name: agentName, pending: 0, approved: 0, rejected: 0, total: 0 };
-      const closer = closers.get(entry.agentId) ?? {
-        name: entry.agent?.name ?? "Closer",
-        email: entry.agent?.email ?? "",
-        pending: 0,
-        approved: 0,
-        rejected: 0,
-        total: 0,
-      };
-      if (entry.closerName?.trim()) closer.name = entry.closerName.trim();
-      if (entry.status === "PENDING") {
-        agent.pending += 1;
-        closer.pending += 1;
-      } else if (entry.status === "APPROVED") {
-        agent.approved += 1;
-        closer.approved += 1;
-      } else if (entry.status === "REJECTED") {
-        agent.rejected += 1;
-        closer.rejected += 1;
-      }
-      agent.total += 1;
-      closer.total += 1;
-      agents.set(agentKey, agent);
-      closers.set(entry.agentId, closer);
-    }
-
-    const byTotal = <T extends { total: number }>(rows: T[]) => rows.sort((a, b) => b.total - a.total);
+    const entries = from ? allEntries.filter((entry) => {
+      const when = entryWhen(entry);
+      return when != null && when >= from;
+    }) : allEntries;
+    const roster = rosterFromHistory(allEntries);
     let pending = 0;
     let approved = 0;
     let rejected = 0;
+    let sold = 0;
     for (const entry of entries) {
+      if (isSalesBook(entry)) {
+        sold += 1;
+        approved += 1;
+        continue;
+      }
       if (entry.status === "PENDING") pending += 1;
-      else if (entry.status === "APPROVED") approved += 1;
-      else if (entry.status === "REJECTED") rejected += 1;
+      else if (entry.status === "APPROVED") {
+        approved += 1;
+        sold += 1;
+      } else if (entry.status === "REJECTED") rejected += 1;
     }
-    const leads = entries.length;
+    const submittedLeads = await prisma.lead.count({
+      where: from ? { createdAt: { gte: from } } : {},
+    });
+    const leads = entries.length + submittedLeads;
     res.json({
-      agents: byTotal([...agents.values()]),
-      closers: byTotal([...closers.values()]),
+      agents: roster.agents,
+      closers: roster.closers,
       summary: {
         leads,
-        sold: approved,
-        conversion: leads > 0 ? Math.round((approved / leads) * 1000) / 10 : 0,
+        sold,
+        conversion: leads > 0 ? Math.round((sold / leads) * 1000) / 10 : 0,
         pending,
         approved,
         rejected,
@@ -387,7 +375,7 @@ crmRouter.get(
   asyncHandler(async (req, res) => {
     const { range, from } = exportRange(req);
     const entries = await prisma.crmEntry.findMany({
-      where: { pingId: null, kind: "SALE", ...(from ? { createdAt: { gte: from } } : {}) },
+      where: { AND: [recordedSaleWhere, ...(from ? [{ createdAt: { gte: from } }] : [])] },
       orderBy: { createdAt: "desc" },
       include: {
         campaign: { select: { name: true } },
@@ -581,8 +569,26 @@ crmRouter.get(
     const tzRaw = Number(req.query.tzOffset);
     const tzOffsetMin = Number.isFinite(tzRaw) ? tzRaw : 0;
     const from = rangeStart(range, tzOffsetMin);
+    const me = await prisma.user.findUnique({ where: { id: req.user!.id }, select: { name: true } });
+    const mine: Prisma.CrmEntryWhereInput = {
+      OR: [
+        { agentId: req.user!.id },
+        { closerName: { equals: me?.name || "__none__", mode: "insensitive" } },
+        { fronterName: { equals: me?.name || "__none__", mode: "insensitive" } },
+      ],
+    };
     const entries = await prisma.crmEntry.findMany({
-      where: { pingId: null, kind: "SALE", agentId: req.user!.id, createdAt: { gte: from } },
+      where: {
+        AND: [
+          mine,
+          {
+            OR: [
+              { kind: "SALE", OR: [{ pingId: null }, { pingId: { not: "sheet-import" } }], createdAt: { gte: from } },
+              { pingId: "sheet-import", status: "REJECTED", reportedAt: { gte: from } },
+            ],
+          },
+        ],
+      },
       orderBy: { createdAt: "desc" },
       include: {
         campaign: { select: { name: true } },
@@ -591,7 +597,8 @@ crmRouter.get(
     });
     const counts = { pending: 0, approved: 0, rejected: 0, total: entries.length };
     for (const entry of entries) {
-      if (entry.status === "PENDING") counts.pending += 1;
+      if (isSalesBook(entry)) counts.approved += 1;
+      else if (entry.status === "PENDING") counts.pending += 1;
       else if (entry.status === "APPROVED") counts.approved += 1;
       else if (entry.status === "REJECTED") counts.rejected += 1;
     }
@@ -616,110 +623,50 @@ crmRouter.get(
   "/analytics",
   requireSalesAccess,
   asyncHandler(async (_req, res) => {
-    const agents = await prisma.user.findMany({
-      where: { role: { in: ["CLOSER", "AGENT"] } },
-      select: { id: true, name: true, email: true },
-      orderBy: { name: "asc" },
+    const entries = await prisma.crmEntry.findMany({
+      where: portalStatsWhere(null),
+      select: { createdAt: true, reportedAt: true, status: true, buyerId: true, pingId: true, agentId: true, closerName: true, fronterName: true },
     });
-
-    const formOnly = { pingId: null, kind: "SALE" };
-    const [statusCounts, agentStats, campaignStats, dailyTrend] = await Promise.all([
-      prisma.crmEntry.groupBy({
-        by: ["status"],
-        where: formOnly,
-        _count: true,
-      }),
-      prisma.crmEntry.groupBy({
-        by: ["agentId", "status"],
-        where: formOnly,
-        _count: true,
-      }),
-      prisma.crmEntry.groupBy({
-        by: ["campaignId", "status"],
-        where: formOnly,
-        _count: true,
-      }),
-      prisma.crmEntry.findMany({
-        where: {
-          ...formOnly,
-          createdAt: { gte: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000) },
-        },
-        select: { createdAt: true, status: true },
-      }),
-    ]);
-
-    const totals = {
-      total: 0,
-      pending: 0,
-      approved: 0,
-      rejected: 0,
-      approvalRate: 0,
-    };
-
-    for (const s of statusCounts) {
-      if (s.status === "PENDING") totals.pending = s._count;
-      if (s.status === "APPROVED") totals.approved = s._count;
-      if (s.status === "REJECTED") totals.rejected = s._count;
-      totals.total += s._count;
+    const roster = rosterFromHistory(entries);
+    const people = new Map<string, { id: string; name: string; email: string; pending: number; approved: number; rejected: number; total: number; approvalRate: number }>();
+    for (const row of [...roster.closers, ...roster.agents]) {
+      const key = personKey(row.name);
+      if (!people.has(key)) people.set(key, { id: key, ...row, approvalRate: 0 });
     }
-    totals.approvalRate =
-      totals.total > 0 ? Math.round((totals.approved / (totals.approved + totals.rejected || 1)) * 1000) / 10 : 0;
-
-    // Agent map
-    const agentMap = new Map(
-      agents.map((a) => [
-        a.id,
-        {
-          id: a.id,
-          name: a.name,
-          email: a.email,
-          pending: 0,
-          approved: 0,
-          rejected: 0,
-          total: 0,
-          approvalRate: 0,
-        },
-      ])
-    );
-
-    for (const row of agentStats) {
-      const entry = agentMap.get(row.agentId);
-      if (entry) {
-        if (row.status === "PENDING") entry.pending += row._count;
-        if (row.status === "APPROVED") entry.approved += row._count;
-        if (row.status === "REJECTED") entry.rejected += row._count;
-        entry.total += row._count;
-      }
-    }
-
-    for (const entry of agentMap.values()) {
-      const resolved = entry.approved + entry.rejected;
-      entry.approvalRate = resolved > 0 ? Math.round((entry.approved / resolved) * 100) : 0;
-    }
-
-    // Daily buckets (last 14 days)
+    const totals = { total: 0, pending: 0, approved: 0, rejected: 0, approvalRate: 0 };
     const daysMap = new Map<string, { date: string; pending: number; approved: number; rejected: number; total: number }>();
-    for (let i = 13; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      const dateKey = d.toISOString().slice(0, 10);
+    for (let i = 13; i >= 0; i -= 1) {
+      const parts = shiftParts(new Date(Date.now() - i * 24 * 60 * 60 * 1000));
+      const dateKey = shiftKey(parts);
       daysMap.set(dateKey, { date: dateKey, pending: 0, approved: 0, rejected: 0, total: 0 });
     }
 
-    for (const entry of dailyTrend) {
-      const dateKey = entry.createdAt.toISOString().slice(0, 10);
-      const bucket = daysMap.get(dateKey);
-      if (bucket) {
-        bucket.total++;
-        if (entry.status === "PENDING") bucket.pending++;
-        if (entry.status === "APPROVED") bucket.approved++;
-        if (entry.status === "REJECTED") bucket.rejected++;
-      }
+    for (const entry of entries) {
+      const status = entry.status === "PENDING" ? "pending" : entry.status === "REJECTED" ? "rejected" : "approved";
+      totals.total += 1;
+      if (status === "pending") totals.pending += 1;
+      if (status === "approved") totals.approved += 1;
+      if (status === "rejected") totals.rejected += 1;
+      const when = entry.pingId === "sheet-import" ? entry.reportedAt : entry.createdAt;
+      if (!when) continue;
+      const bucket = daysMap.get(shiftKey(shiftParts(when)));
+      if (!bucket) continue;
+      bucket.total += 1;
+      if (status === "pending") bucket.pending += 1;
+      if (status === "approved") bucket.approved += 1;
+      if (status === "rejected") bucket.rejected += 1;
+    }
+    totals.approvalRate = totals.approved + totals.rejected > 0
+      ? Math.round((totals.approved / (totals.approved + totals.rejected)) * 1000) / 10
+      : 0;
+    for (const person of people.values()) {
+      const resolved = person.approved + person.rejected;
+      person.approvalRate = resolved > 0 ? Math.round((person.approved / resolved) * 100) : 0;
     }
 
     res.json({
       totals,
-      agentPerformance: [...agentMap.values()].sort((a, b) => b.total - a.total),
+      agentPerformance: [...people.values()].sort((a, b) => b.total - a.total || a.name.localeCompare(b.name)),
       dailyTrend: [...daysMap.values()],
     });
   })
@@ -746,10 +693,23 @@ crmRouter.get(
     const userId = isCloserRole(req.user!.role) ? req.user!.id : requestedUser;
 
     const where: Prisma.CrmEntryWhereInput = {
-      pingId: null,
-      kind: "SALE",
-      ...(did ? { did } : {}),
-      ...(userId ? { OR: [{ agentId: userId }, { closerName: { equals: (await prisma.user.findUnique({ where: { id: userId }, select: { name: true } }))?.name || "__none__", mode: "insensitive" } }] } : {}),
+      AND: [
+        recordedSaleWhere,
+        ...(did ? [{ did }] : []),
+        ...(userId
+          ? [{
+              OR: [
+                { agentId: userId },
+                {
+                  closerName: {
+                    equals: (await prisma.user.findUnique({ where: { id: userId }, select: { name: true } }))?.name || "__none__",
+                    mode: "insensitive" as const,
+                  },
+                },
+              ],
+            }]
+          : []),
+      ],
     };
     if (campaignId) {
       const children = await prisma.campaign.findMany({ where: { parentId: campaignId }, select: { id: true } });
@@ -770,7 +730,7 @@ crmRouter.get(
             orderBy: { name: "asc" },
           }),
       prisma.crmEntry.findMany({
-        where: { pingId: null, kind: "SALE", did: { not: "" }, ...(userId ? { agentId: userId } : {}) },
+        where: { AND: [recordedSaleWhere, { did: { not: "" } }, ...(userId ? [{ agentId: userId }] : [])] },
         distinct: ["did"],
         select: { did: true },
         take: 200,
