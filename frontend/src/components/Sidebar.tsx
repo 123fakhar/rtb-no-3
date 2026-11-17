@@ -21,6 +21,7 @@ import {
   Target,
   PieChart,
   PhoneOff,
+  Phone,
 } from "lucide-react";
 
 interface SidebarProps {
@@ -49,6 +50,7 @@ export function Sidebar({ currentTab, onTabChange }: SidebarProps) {
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
     { id: "analytics", label: "Analytics", icon: BarChart3 },
     { id: "leads", label: "Leads", icon: Users },
+    { id: "aca", label: "ACA", icon: Phone },
     { id: "bids", label: "Bids", icon: CircleDollarSign },
     { id: "buyers", label: "Buyers", icon: Building2 },
     { id: "campaigns", label: "Campaigns", icon: Target },
@@ -65,6 +67,7 @@ export function Sidebar({ currentTab, onTabChange }: SidebarProps) {
   const closerNav = [
     { id: "my-performance", label: "Closer Performance", icon: BarChart3 },
     { id: "submit-lead", label: "Submit Lead", icon: PlusCircle },
+    { id: "aca", label: "ACA", icon: Phone },
     { id: "my-leads", label: "My Leads", icon: Send },
     { id: "my-sales", label: "My Sales", icon: PieChart },
     { id: "submit-crm", label: "Submit CRM", icon: FilePlus },
@@ -74,6 +77,7 @@ export function Sidebar({ currentTab, onTabChange }: SidebarProps) {
   const managerNav = [
     { id: "performance", label: "Performance", icon: BarChart3 },
     { id: "leads", label: "Leads", icon: Send },
+    { id: "aca", label: "ACA", icon: Phone },
     { id: "sales", label: "Sales", icon: ClipboardList },
     { id: "sales-stats", label: "Sales Stats", icon: PieChart },
     { id: "campaigns", label: "Campaigns", icon: Target },

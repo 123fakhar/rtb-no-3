@@ -1,5 +1,5 @@
 import type { BuiltRequest, ProviderAdapter, ProviderContext, ProviderResult } from "./types";
-import { e164Phone, postalCode, resolvedParams, tenDigitPhone, withQuery } from "./url";
+import { applyTokens, e164Phone, postalCode, resolvedParams, tenDigitPhone, withQuery } from "./url";
 
 type Interpret = ProviderAdapter["interpret"];
 
@@ -111,6 +111,25 @@ export function createGenericAdapter(opts: {
         }
       }
 
+      if (ctx.provider === "nextgen") {
+        const caller = tenDigitPhone(ctx.lead.phone);
+        const state = ctx.lead.state && ctx.lead.state !== "undefined" ? ctx.lead.state.trim().toUpperCase() : "";
+        let raw = ctx.baseUrl;
+        try {
+          raw = decodeURI(ctx.baseUrl);
+        } catch {
+          raw = ctx.baseUrl;
+        }
+        const url = new URL(applyTokens(raw, ctx.lead));
+        const parts = url.pathname.split("/").filter(Boolean);
+        const pingAt = parts.lastIndexOf("ping");
+        if (pingAt >= 0 && parts[pingAt + 1] && caller.length === 10) {
+          url.pathname = `/${parts.slice(0, pingAt + 2).concat(caller).join("/")}`;
+        }
+        if (state) url.searchParams.set("state", state);
+        return { url: url.toString(), method: "GET", headers: { ...ctx.headers } };
+      }
+
       if (ctx.provider === "callgrid") {
         const caller = e164Phone(ctx.lead.phone);
         const postal = postalCode(ctx.lead.zip);
@@ -125,7 +144,7 @@ export function createGenericAdapter(opts: {
       }
       // Reference buyers are called with the query string on the URL.
       // POST transfers use that same URL and an empty body.
-      const url = withQuery(ctx.baseUrl, pairs);
+      const url = withQuery(applyTokens(ctx.baseUrl, ctx.lead), pairs);
       if (ctx.method === "GET") {
         return { url, method: "GET", headers: { ...ctx.headers } };
       }
@@ -195,6 +214,41 @@ export const interpretCallGrid: Interpret = (body, httpStatus) => {
       : message ||
         (Number.isFinite(code) ? CALLGRID_CODES[code] || `CallGrid code ${code}` : null) ||
         (httpStatus >= 400 ? `HTTP ${httpStatus}` : "Rejected"),
+  };
+};
+
+/** NextGen vendor ping: `accept` is the decision, `cause` explains a rejection. */
+export const interpretNextgen: Interpret = (body, httpStatus) => {
+  const b = (body ?? {}) as Record<string, unknown>;
+  const status = typeof b.status === "string" ? b.status.toLowerCase() : "";
+  const available = typeof b.available === "number" ? b.available : Number(b.available);
+  const ready = typeof b.ready === "number" ? b.ready : Number(b.ready);
+  const accepted =
+    httpStatus < 400 &&
+    b.accept !== false &&
+    (b.accept === true ||
+      b.accepted === true ||
+      status === "ready" ||
+      status === "accepted" ||
+      (Number.isFinite(available) && available > 0) ||
+      (Number.isFinite(ready) && ready > 0));
+  const bidRaw = b.bidAmount ?? b.bid ?? b.price ?? b.payout ?? b.cpa ?? b.rate ?? b.amount;
+  const bidNum = typeof bidRaw === "number" ? bidRaw : bidRaw != null && bidRaw !== "" ? Number(bidRaw) : NaN;
+  const phone =
+    (typeof b.destination === "string" && b.destination) ||
+    (typeof b.transfer_number === "string" && b.transfer_number) ||
+    (typeof b.phone === "string" && b.phone) ||
+    (typeof b.did === "string" && b.did) ||
+    (typeof b.number === "string" && b.number) ||
+    (typeof b.tracking_number === "string" && b.tracking_number) ||
+    null;
+  const cause = typeof b.cause === "string" ? b.cause : "";
+  const reason = typeof b.reason === "string" ? b.reason : "";
+  return {
+    accepted,
+    bid: Number.isFinite(bidNum) ? bidNum : null,
+    trackingNumber: accepted ? phone : null,
+    rejectReason: accepted ? null : cause || reason || (httpStatus >= 400 ? `HTTP ${httpStatus}` : "Rejected"),
   };
 };
 

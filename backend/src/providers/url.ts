@@ -23,12 +23,19 @@ export function e164Phone(phone: string): string {
   return ten.length === 10 ? `+1${ten}` : clean(phone);
 }
 
-/** Token substitution for values like "{caller_number}". */
+/** Token substitution for values like "{caller_number}" and "[Call:CallerId]". */
 export function applyTokens(template: string, lead: ProviderContext["lead"]): string {
+  const caller = tenDigitPhone(lead.phone);
+  const state = clean(lead.state).toUpperCase();
   return template
-    .replaceAll("{caller_number}", tenDigitPhone(lead.phone))
+    .replaceAll("{caller_number}", caller)
+    .replaceAll("{caller_id}", caller)
+    .replace(/\[Call:CallerId\]/gi, caller)
+    .replace(/\[caller_phone\]/gi, caller)
+    .replaceAll("CALLER_PHONE", caller)
+    .replace(/\[Call:State\]/gi, state)
     .replaceAll("{caller_zip}", postalCode(lead.zip))
-    .replaceAll("{caller_state}", clean(lead.state))
+    .replaceAll("{caller_state}", state)
     .replaceAll("{homeowner}", "yes")
     .replaceAll("{property_type}", "single_family")
     .replaceAll("{placement_id}", "");

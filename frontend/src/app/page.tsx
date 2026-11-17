@@ -9,6 +9,7 @@ import { CampaignsView } from "@/components/CampaignsView";
 import { BuyersView } from "@/components/BuyersView";
 import { LeadsView } from "@/components/LeadsView";
 import { SubmitLeadView } from "@/components/SubmitLeadView";
+import { AcaFormView } from "@/components/AcaFormView";
 import { LeadBuyerRouting } from "@/components/LeadBuyerRouting";
 import { TransactionsView } from "@/components/TransactionsView";
 import { CrmFormView } from "@/components/CrmFormView";
@@ -39,7 +40,7 @@ function defaultTab(role: string | undefined) {
 }
 
 function tabAllowed(tab: string, role: string | undefined) {
-  const shared = ["submit-lead", "my-leads", "submit-crm"];
+  const shared = ["submit-lead", "aca", "my-leads", "submit-crm"];
   if (shared.includes(tab)) return true;
   if (role === "ADMIN") {
     return [
@@ -335,6 +336,7 @@ export default function HomePage() {
           {isManager && currentTab === "closers" && <ClosersView />}
 
           {/* Agent Views */}
+          {currentTab === "aca" && <AcaFormView />}
           {currentTab === "submit-lead" && (
             <SubmitLeadView
               onSuccess={(newLeadId) => {

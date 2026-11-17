@@ -31,6 +31,7 @@ function providerLabel(key: string): string {
     retreaver: "Retreaver",
     trackdrive: "TrackDrive",
     callgrid: "CallGrid",
+    nextgen: "NextGen",
     unset: "Unassigned",
     unknown: "Unassigned",
   };

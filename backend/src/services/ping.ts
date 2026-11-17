@@ -172,7 +172,7 @@ export async function executePing(input: PingInput) {
 
 /** TrackDrive caller-number bids reserve the campaign DID. That is the number to dial. */
 function dialerNumberFromConfig(extra: Record<string, unknown>): string | null {
-  const raw = String(extra.trackdriveNumber || extra.providerCampaignId || "").trim();
+  const raw = String(extra.transferNumber || extra.did || extra.trackdriveNumber || extra.providerCampaignId || "").trim();
   const digits = raw.replace(/\D/g, "");
   if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`;
   if (digits.length === 10) return `+1${digits}`;
