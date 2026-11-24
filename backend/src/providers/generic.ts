@@ -100,6 +100,35 @@ export function createGenericAdapter(opts: {
         if (ten && !has("caller_number")) pairs.push({ key: "caller_number", value: ten });
       }
 
+      if (ctx.provider === "moja") {
+        const closed = mojaClosedReason(ctx.extra);
+        if (closed) throw new Error(closed);
+        const caller = tenDigitPhone(ctx.lead.phone);
+        const callerId = caller.length === 10 ? `1${caller}` : caller;
+        const zip = postalCode(ctx.lead.zip);
+        const state = ctx.lead.state && ctx.lead.state !== "undefined" ? ctx.lead.state.trim().toUpperCase() : "";
+        pairs.length = 0;
+        if (callerId) pairs.push({ key: "CALLER_ID", value: callerId });
+        if (zip) {
+          pairs.push({ key: "caller_zip", value: zip });
+          pairs.push({ key: "ZIP_CODE", value: zip });
+        }
+        if (state) pairs.push({ key: "CALLER_STATE", value: state });
+      }
+
+      if (ctx.provider === "retreaver") {
+        const publisherId = extraValue("publisherId");
+        if (publisherId && !has("publisher_id")) pairs.push({ key: "publisher_id", value: publisherId });
+        // Retreaver matches this publisher on an 11-digit caller number. Buyers with no publisher id keep the 10-digit number already in use.
+        const caller = tenDigitPhone(ctx.lead.phone);
+        if (publisherId && caller.length === 10) {
+          const index = pairs.findIndex((pair) => pair.key.toLowerCase() === "caller_number");
+          const value = `1${caller}`;
+          if (index >= 0) pairs[index] = { key: "caller_number", value };
+          else pairs.push({ key: "caller_number", value });
+        }
+      }
+
       if (opts.apiKeyParam && ctx.apiKey && !has(opts.apiKeyParam)) {
         pairs.push({ key: opts.apiKeyParam, value: ctx.apiKey });
       }
@@ -148,7 +177,11 @@ export function createGenericAdapter(opts: {
       if (ctx.method === "GET") {
         return { url, method: "GET", headers: { ...ctx.headers } };
       }
-      if (ctx.provider === "ringba" || ctx.provider === "retreaver" || ctx.provider === "intelhouse" || ctx.provider === "ringfuel") {
+      if (ctx.provider === "retreaver") {
+        // Retreaver reads the POST query string. A JSON body is not part of the accepted request.
+        return { url, method: "POST", headers: { ...ctx.headers } };
+      }
+      if (ctx.provider === "ringba" || ctx.provider === "intelhouse" || ctx.provider === "ringfuel") {
         return {
           url,
           method: "POST",
@@ -269,6 +302,64 @@ export const interpretCallisto: Interpret = (body, httpStatus) => {
     bid,
     trackingNumber: phone,
     rejectReason: accepted ? null : reason,
+  };
+};
+
+const WEEKDAY: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+
+/** Home D15 is closed outside the buyer's Eastern Time window. Auto is 24/7 and has no windows. */
+function mojaClosedReason(extra: Record<string, unknown>): string | null {
+  const hours = extra.hours;
+  if (!hours || typeof hours !== "object") return null;
+  const windows = (hours as { windows?: unknown }).windows;
+  if (!Array.isArray(windows) || windows.length === 0) return null;
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/New_York",
+      weekday: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    })
+      .formatToParts(new Date())
+      .map((part) => [part.type, part.value]),
+  );
+  const day = WEEKDAY[parts.weekday] ?? -1;
+  const hour = Number(parts.hour);
+  const minute = Number(parts.minute);
+  const now = (hour === 24 ? 0 : hour) * 60 + minute;
+  const open = windows.some((window) => {
+    if (!window || typeof window !== "object") return false;
+    const row = window as { days?: unknown; start?: unknown; end?: unknown };
+    const days = Array.isArray(row.days) ? row.days.map(Number) : [];
+    const [startHour, startMinute] = String(row.start || "").split(":").map(Number);
+    const [endHour, endMinute] = String(row.end || "").split(":").map(Number);
+    if (!days.includes(day) || !Number.isFinite(startHour) || !Number.isFinite(endHour)) return false;
+    const start = startHour * 60 + (startMinute || 0);
+    const end = endHour * 60 + (endMinute || 0);
+    return now >= start && now < end;
+  });
+  if (open) return null;
+  return typeof (hours as { label?: unknown }).label === "string"
+    ? `Outside buyer hours (${(hours as { label: string }).label})`
+    : "Outside buyer hours";
+}
+
+/** Moja Inbound RTB: a bid is an eligible route with a transfer number and payout. */
+export const interpretMoja: Interpret = (body, httpStatus) => {
+  const b = (body ?? {}) as Record<string, unknown>;
+  const routes = Array.isArray(b.eligible_routes) ? (b.eligible_routes as Record<string, unknown>[]) : [];
+  const route = routes.find((item) => item && (typeof item.number === "string" || item.payout != null));
+  const payout = route ? Number(route.payout) : NaN;
+  const number = route && typeof route.number === "string" ? route.number : null;
+  const accepted = httpStatus < 400 && b.success === true && Boolean(number);
+  const message = typeof b.message === "string" ? b.message : "";
+  const reason = typeof b.reason === "string" ? b.reason : "";
+  return {
+    accepted,
+    bid: Number.isFinite(payout) ? payout : null,
+    trackingNumber: accepted ? number : null,
+    rejectReason: accepted ? null : message || reason || (b.success === false ? "No eligible route" : httpStatus >= 400 ? `HTTP ${httpStatus}` : "No eligible route"),
   };
 };
 

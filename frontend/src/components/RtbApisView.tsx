@@ -520,6 +520,7 @@ export function RtbApisView() {
                   <option value="callgrid">Call Grid</option>
                   <option value="callisto">Callisto</option>
                   <option value="nextgen">NextGen</option>
+                  <option value="moja">Moja</option>
                   <option value="generic">Generic (manual endpoint + parameters)</option>
                 </select>
                 <p className="text-[10px] text-slate-400 mt-1">
@@ -646,7 +647,7 @@ export function RtbApisView() {
                 </div>
               )}
 
-              {(provider === "retreaver" || provider === "callisto" || provider === "nextgen") && (
+              {(provider === "retreaver" || provider === "callisto" || provider === "nextgen" || provider === "moja") && (
                 <div className="space-y-3 p-3.5 bg-slate-50 rounded-xl border border-slate-200">
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1">

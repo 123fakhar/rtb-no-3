@@ -129,9 +129,9 @@ export async function executePing(input: PingInput) {
     };
   }
 
-  if (result.accepted && !result.trackingNumber) {
-    const dialer = dialerNumberFromConfig((rtbConfig.extra as Record<string, unknown>) ?? {});
-    if (dialer) result.trackingNumber = dialer;
+  const dialer = dialerNumberFromConfig((rtbConfig.extra as Record<string, unknown>) ?? {});
+  if (result.accepted && dialer && (rtbConfig.provider === "nextgen" || !result.trackingNumber)) {
+    result.trackingNumber = dialer;
   }
 
   const durationMs = Date.now() - started;

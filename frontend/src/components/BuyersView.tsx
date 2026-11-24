@@ -319,6 +319,7 @@ export function BuyersView() {
                   <option value="intelhouse">IntelHouse</option>
                   <option value="callgrid">Call Grid</option>
                   <option value="callisto">Callisto</option>
+                  <option value="moja">Moja</option>
                   <option value="generic">Generic RTB</option>
                 </select>
               </div>

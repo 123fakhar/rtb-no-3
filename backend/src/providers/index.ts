@@ -1,5 +1,5 @@
 import type { ProviderAdapter } from "./types";
-import { createGenericAdapter, defaultInterpret, interpretCallisto, interpretCallGrid, interpretNextgen } from "./generic";
+import { createGenericAdapter, defaultInterpret, interpretCallisto, interpretCallGrid, interpretMoja, interpretNextgen } from "./generic";
 
 /**
  * One adapter per supported buyer platform. Adding a provider is a single
@@ -66,6 +66,12 @@ export const providers: Record<string, ProviderAdapter> = {
       { key: "pingEndpoint", label: "Ping Endpoint" },
     ],
     interpret: interpretCallisto,
+  }),
+  moja: createGenericAdapter({
+    key: "moja",
+    label: "Moja",
+    fields: [{ key: "pingEndpoint", label: "RTB endpoint" }],
+    interpret: interpretMoja,
   }),
   nextgen: createGenericAdapter({
     key: "nextgen",

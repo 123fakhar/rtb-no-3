@@ -21,13 +21,6 @@ interface PingResult {
   rejectReason: string | null;
 }
 
-function formatPhone(value: string) {
-  const digits = value.replace(/\D/g, "");
-  const ten = digits.length === 11 && digits.startsWith("1") ? digits.slice(1) : digits;
-  if (ten.length !== 10) return value;
-  return `(${ten.slice(0, 3)}) ${ten.slice(3, 6)}-${ten.slice(6)}`;
-}
-
 export function AcaFormView() {
   const [phone, setPhone] = useState("");
   const [zip, setZip] = useState("");
@@ -100,7 +93,6 @@ export function AcaFormView() {
   };
 
   const accepted = result?.status === "RESERVED";
-  const dial = result?.trackingNumber ? formatPhone(result.trackingNumber) : TRANSFER;
 
   return (
     <div className="max-w-4xl mx-auto p-6 md:p-10 space-y-8 animate-in fade-in duration-200">
@@ -113,7 +105,8 @@ export function AcaFormView() {
         </div>
         <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-slate-900">ACA D50</h1>
         <p className="text-xs text-slate-500 mt-1">
-          Submit the caller. When D50 accepts, transfer the call to {TRANSFER}.
+          The ping only checks whether an agent is available. It does not return a number.
+          When an agent is available, transfer the call to {TRANSFER}.
         </p>
       </div>
 
@@ -132,12 +125,11 @@ export function AcaFormView() {
           >
             <div className="flex items-center gap-2 font-bold">
               {accepted ? <CheckCircle2 className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
-              {accepted ? "Accepted" : "Not accepted"}
+              {accepted ? "Agent available" : "No agent available"}
             </div>
             {accepted ? (
               <p className="mt-2">
-                Transfer number <span className="font-mono font-bold">{dial}</span>
-                {result.bid != null ? ` · Bid $${result.bid}` : ""}
+                Transfer this caller to <span className="font-mono font-bold">{TRANSFER}</span>
               </p>
             ) : (
               <p className="mt-2">{result.rejectReason || "The buyer did not accept this caller."}</p>

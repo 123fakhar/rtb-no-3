@@ -3,7 +3,7 @@ const prisma = new PrismaClient();
 
 const BUYER_NAME = "ACA D50";
 const PING_URL =
-  "https://api.nextgeninsurancesolutionsinc.com/api/vendor/ping/6537598e-d08b-41a8-9f17-426159d256bd/[Call:CallerId]";
+  "https://api.nextgeninsurancesolutionsinc.com/api/vendor/ping/457de3e2-88d2-47e2-b79e-55e0f4bd7062/[Call:CallerId]";
 const DID = "8037236864";
 
 async function main() {

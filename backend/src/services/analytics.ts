@@ -32,6 +32,7 @@ function providerLabel(key: string): string {
     trackdrive: "TrackDrive",
     callgrid: "CallGrid",
     nextgen: "NextGen",
+    moja: "Moja",
     unset: "Unassigned",
     unknown: "Unassigned",
   };
